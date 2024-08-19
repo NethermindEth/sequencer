@@ -154,14 +154,14 @@ jobs:
       - run: scripts/taplo.sh
 
   machete:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run Machete (detect unused dependencies)
         uses: bnjbvr/cargo-machete@main
 
   check:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -177,7 +177,7 @@ jobs:
       - run: cargo check --workspace -r --all-features
 
 #  merge-gatekeeper:
-#    runs-on: ubuntu-20.04
+#    runs-on: ubuntu-latest
 #    # Restrict permissions of the GITHUB_TOKEN.
 #    # Docs: https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs
 #    permissions:

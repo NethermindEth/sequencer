@@ -89,6 +89,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install_rust
+      - name: Set up Native Dependencies
+        uses: ./.github/actions/setup-native-deps
+        id: native-deps
       - uses: Swatinem/rust-cache@v2
       - uses: Noelware/setup-protoc@1.1.0
         with:
@@ -146,7 +149,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install_rust
       - uses: Swatinem/rust-cache@v2
-      
+
       - uses: baptiste0928/cargo-install@v3
         with:
           crate: taplo-cli

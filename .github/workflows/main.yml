@@ -18,7 +18,7 @@ on:
 
 jobs:
   commitlint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,7 +41,7 @@ jobs:
         run: echo "$TITLE" | commitlint --verbose
 
   format:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master # TODO(Nimrod, 15/8/2024): Use stable toolchain.
@@ -50,11 +50,11 @@ jobs:
           toolchain: nightly-2024-04-29
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-ubuntu-20.04"
+          prefix-key: "v0-rust-ubuntu-latest"
       - run: scripts/rust_fmt.sh --check
 
   clippy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Noelware/setup-protoc@1.1.0
@@ -68,7 +68,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-ubuntu-20.04"
+          prefix-key: "v0-rust-ubuntu-latest"
 
       # Setup pypy and link to the location expected by .cargo/config.toml.
       - uses: actions/setup-python@v5
@@ -83,7 +83,7 @@ jobs:
       - run: scripts/clippy.sh
 
   doc:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -96,7 +96,7 @@ jobs:
       - run: cargo doc --workspace -r --document-private-items --no-deps
 
   run-tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,7 +106,7 @@ jobs:
       - uses: Noelware/setup-protoc@1.1.0
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-ubuntu-20.04"
+          prefix-key: "v0-rust-ubuntu-latest"
       - name: Set up Native Dependencies
         uses: ./.github/actions/setup-native-deps
         id: native-deps
@@ -141,7 +141,7 @@ jobs:
           SEED: 0
 
   taplo:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install_rust

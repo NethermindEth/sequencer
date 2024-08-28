@@ -61,9 +61,10 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
+      # Enviorment setup.
       - uses: actions/checkout@v4
       - uses: Noelware/setup-protoc@1.1.0
-      - uses: ./.github/actions/install_rust
+      - uses: baptiste0928/cargo-install@v3
         with:
           components: clippy
 

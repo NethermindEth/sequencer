@@ -41,7 +41,6 @@ fn validate_no_path_dependencies() {
 }
 
 #[test]
-#[ignore]
 fn test_no_features_in_workspace() {
     let dependencies_with_features: Vec<_> = ROOT_TOML
         .dependencies()

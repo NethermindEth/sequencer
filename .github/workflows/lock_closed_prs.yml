@@ -9,7 +9,7 @@ on:
 jobs:
   #  lock:
   name: 🔒 Lock closed issues and PRs
-  runs-on: ubuntu-20.04
+  runs-on: ubuntu-22.04
   steps:
     - uses: dessant/lock-threads@v2.0.3
       with:

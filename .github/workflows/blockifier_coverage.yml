@@ -9,7 +9,7 @@ on:
 
 jobs:
   coverage:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -17,7 +17,7 @@ jobs:
       - uses: ./.github/actions/install_rust
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-ubuntu-20.04"
+          prefix-key: "v0-rust-ubuntu-22.04"
 
       # Setup pypy and link to the location expected by .cargo/config.toml.
       - uses: actions/setup-python@v5

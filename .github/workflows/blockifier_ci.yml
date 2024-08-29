@@ -34,13 +34,13 @@ on:
 
 jobs:
   featureless-build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install_rust
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: "v0-rust-ubuntu-20.04"
+          prefix-key: "v0-rust-ubuntu-22.04"
       - name: Set up Native Dependencies
         uses: ./.github/actions/setup-native-deps
         id: native-deps
@@ -55,7 +55,7 @@ jobs:
 #
 #      - uses: Swatinem/rust-cache@v2
 #        with:
-#          prefix-key: "v1-rust-ubuntu-20.04"
+#          prefix-key: "v1-rust-ubuntu-22.04"
 #
 #      - name: Build native blockifier
 #        run: ./build_native_blockifier_in_docker.sh

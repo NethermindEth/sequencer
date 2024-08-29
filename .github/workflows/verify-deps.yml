@@ -7,7 +7,7 @@ on:
 jobs:
   latest_deps:
     name: Latest Dependencies
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,9 @@
 use futures::channel::{mpsc, oneshot};
 use futures::StreamExt;
-use papyrus_network::network_manager::{mock_register_broadcast_subscriber, BroadcastNetworkMock};
+use papyrus_network::network_manager::test_utils::{
+    mock_register_broadcast_topic,
+    BroadcastNetworkMock,
+};
 use papyrus_protobuf::consensus::{ConsensusMessage, Proposal, Vote};
 use papyrus_storage::body::BodyStorageWriter;
 use papyrus_storage::header::HeaderStorageWriter;
@@ -104,7 +107,7 @@ async fn decision() {
     let (_, mut papyrus_context, _, mut sync_network) = test_setup();
     let block = PapyrusConsensusBlock::default();
     let precommit = Vote::default();
-    papyrus_context.notify_decision(block, vec![precommit.clone()]).await.unwrap();
+    papyrus_context.decision_reached(block, vec![precommit.clone()]).await.unwrap();
     assert_eq!(sync_network.messages_to_broadcast_receiver.next().await.unwrap(), precommit);
 }
 
@@ -127,8 +130,8 @@ fn test_setup() -> (
         .commit()
         .unwrap();
 
-    let network_channels = mock_register_broadcast_subscriber().unwrap();
-    let sync_channels = mock_register_broadcast_subscriber().unwrap();
+    let network_channels = mock_register_broadcast_topic().unwrap();
+    let sync_channels = mock_register_broadcast_topic().unwrap();
     let papyrus_context = PapyrusConsensusContext::new(
         storage_reader.clone(),
         network_channels.subscriber_channels.messages_to_broadcast_sender,

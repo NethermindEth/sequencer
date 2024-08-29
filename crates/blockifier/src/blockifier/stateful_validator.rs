@@ -18,7 +18,11 @@ use crate::state::cached_state::CachedState;
 use crate::state::errors::StateError;
 use crate::state::state_api::StateReader;
 use crate::transaction::account_transaction::AccountTransaction;
-use crate::transaction::errors::{TransactionExecutionError, TransactionPreValidationError};
+use crate::transaction::errors::{
+    TransactionExecutionError,
+    TransactionInfoCreationError,
+    TransactionPreValidationError,
+};
 use crate::transaction::transaction_execution::Transaction;
 use crate::transaction::transactions::ValidatableTransaction;
 
@@ -36,6 +40,8 @@ pub enum StatefulValidatorError {
     TransactionExecutorError(#[from] TransactionExecutorError),
     #[error(transparent)]
     TransactionPreValidationError(#[from] TransactionPreValidationError),
+    #[error(transparent)]
+    TransactionCreationError(#[from] TransactionInfoCreationError),
 }
 
 pub type StatefulValidatorResult<T> = Result<T, StatefulValidatorError>;
@@ -65,7 +71,7 @@ impl<S: StateReader> StatefulValidator<S> {
             return Ok(());
         }
 
-        let tx_context = self.tx_executor.block_context.to_tx_context(&tx);
+        let tx_context = self.tx_executor.block_context.to_tx_context(&tx)?;
         self.perform_pre_validation_stage(&tx, &tx_context)?;
 
         if skip_validate {
@@ -112,7 +118,7 @@ impl<S: StateReader> StatefulValidator<S> {
         mut remaining_gas: u64,
     ) -> StatefulValidatorResult<(Option<CallInfo>, TransactionReceipt)> {
         let mut execution_resources = ExecutionResources::default();
-        let tx_context = Arc::new(self.tx_executor.block_context.to_tx_context(tx));
+        let tx_context = Arc::new(self.tx_executor.block_context.to_tx_context(tx)?);
 
         let limit_steps_by_resources = true;
         let validate_call_info = tx.validate_tx(

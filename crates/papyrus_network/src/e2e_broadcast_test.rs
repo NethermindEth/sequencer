@@ -13,7 +13,7 @@ use crate::network_manager::GenericNetworkManager;
 use crate::sqmr;
 use crate::sqmr::Bytes;
 
-const TIMEOUT: Duration = Duration::from_secs(1);
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 async fn create_swarm(bootstrap_peer_multiaddr: Option<Multiaddr>) -> Swarm<MixedBehaviour> {
     let mut swarm = Swarm::new_ephemeral(|keypair| {
@@ -22,6 +22,7 @@ async fn create_swarm(bootstrap_peer_multiaddr: Option<Multiaddr>) -> Swarm<Mixe
             bootstrap_peer_multiaddr,
             sqmr::Config::default(),
             ChainId::Mainnet,
+            None,
         )
     });
     // Not using SwarmExt::listen because it panics if the swarm emits other events
@@ -44,7 +45,7 @@ async fn create_swarm(bootstrap_peer_multiaddr: Option<Multiaddr>) -> Swarm<Mixe
 fn create_network_manager(
     swarm: Swarm<MixedBehaviour>,
 ) -> GenericNetworkManager<Swarm<MixedBehaviour>> {
-    GenericNetworkManager::generic_new(swarm)
+    GenericNetworkManager::generic_new(swarm, None)
 }
 
 const BUFFER_SIZE: usize = 100;
@@ -102,7 +103,7 @@ async fn broadcast_subscriber_end_to_end_test() {
             TIMEOUT, async move {
                 // TODO(shahak): Remove this sleep once we fix the bug of broadcasting while there
                 // are no peers.
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 let number1 = Number(1);
                 let number2 = Number(2);
                 let mut broadcasted_messages_receiver2_1 =

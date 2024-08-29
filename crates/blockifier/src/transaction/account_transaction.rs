@@ -33,6 +33,7 @@ use crate::transaction::constants;
 use crate::transaction::errors::{
     TransactionExecutionError,
     TransactionFeeError,
+    TransactionInfoCreationError,
     TransactionPreValidationError,
 };
 use crate::transaction::objects::{
@@ -74,6 +75,29 @@ pub enum AccountTransaction {
     Declare(DeclareTransaction),
     DeployAccount(DeployAccountTransaction),
     Invoke(InvokeTransaction),
+}
+
+impl TryFrom<starknet_api::executable_transaction::Transaction> for AccountTransaction {
+    type Error = TransactionExecutionError;
+
+    fn try_from(
+        executable_transaction: starknet_api::executable_transaction::Transaction,
+    ) -> Result<Self, Self::Error> {
+        match executable_transaction {
+            starknet_api::executable_transaction::Transaction::Declare(declare_tx) => {
+                Ok(Self::Declare(declare_tx.try_into()?))
+            }
+            starknet_api::executable_transaction::Transaction::DeployAccount(deploy_account_tx) => {
+                Ok(Self::DeployAccount(DeployAccountTransaction {
+                    tx: deploy_account_tx,
+                    only_query: false,
+                }))
+            }
+            starknet_api::executable_transaction::Transaction::Invoke(invoke_tx) => {
+                Ok(Self::Invoke(InvokeTransaction { tx: invoke_tx, only_query: false }))
+            }
+        }
+    }
 }
 
 impl HasRelatedFeeType for AccountTransaction {
@@ -147,6 +171,14 @@ impl AccountTransaction {
         signature.0.len()
     }
 
+    pub fn tx_hash(&self) -> TransactionHash {
+        match self {
+            Self::Declare(tx) => tx.tx_hash(),
+            Self::DeployAccount(tx) => tx.tx_hash(),
+            Self::Invoke(tx) => tx.tx_hash(),
+        }
+    }
+
     fn verify_tx_version(&self, version: TransactionVersion) -> TransactionExecutionResult<()> {
         let allowed_versions: Vec<TransactionVersion> = match self {
             // Support `Declare` of version 0 in order to allow bootstrapping of a new system.
@@ -184,7 +216,7 @@ impl AccountTransaction {
         let tx_info = &tx_context.tx_info;
         Self::handle_nonce(state, tx_info, strict_nonce_check)?;
 
-        if charge_fee && tx_info.enforce_fee()? {
+        if charge_fee && tx_info.enforce_fee() {
             self.check_fee_bounds(tx_context)?;
 
             verify_can_pay_committed_bounds(state, tx_context)?;
@@ -211,7 +243,7 @@ impl AccountTransaction {
                 let ResourceBounds {
                     max_amount: max_l1_gas_amount,
                     max_price_per_unit: max_l1_gas_price,
-                } = context.l1_resource_bounds()?;
+                } = context.l1_resource_bounds();
 
                 let max_l1_gas_amount_as_u128: u128 = max_l1_gas_amount.into();
                 if max_l1_gas_amount_as_u128 < minimal_l1_gas_amount {
@@ -289,16 +321,13 @@ impl AccountTransaction {
         }
     }
 
-    fn assert_actual_fee_in_bounds(
-        tx_context: &Arc<TransactionContext>,
-        actual_fee: Fee,
-    ) -> TransactionExecutionResult<()> {
+    fn assert_actual_fee_in_bounds(tx_context: &Arc<TransactionContext>, actual_fee: Fee) {
         match &tx_context.tx_info {
             TransactionInfo::Current(context) => {
                 let ResourceBounds {
                     max_amount: max_l1_gas_amount,
                     max_price_per_unit: max_l1_gas_price,
-                } = context.l1_resource_bounds()?;
+                } = context.l1_resource_bounds();
                 if actual_fee > Fee(u128::from(max_l1_gas_amount) * max_l1_gas_price) {
                     panic!(
                         "Actual fee {:#?} exceeded bounds; max amount is {:#?}, max price is
@@ -316,7 +345,6 @@ impl AccountTransaction {
                 }
             }
         }
-        Ok(())
     }
 
     fn handle_fee<S: StateReader>(
@@ -333,7 +361,7 @@ impl AccountTransaction {
         }
 
         // TODO(Amos, 8/04/2024): Add test for this assert.
-        Self::assert_actual_fee_in_bounds(&tx_context, actual_fee)?;
+        Self::assert_actual_fee_in_bounds(&tx_context, actual_fee);
 
         let fee_transfer_call_info = if concurrency_mode && !tx_context.is_sequencer_the_sender() {
             Self::concurrency_execute_fee_transfer(state, tx_context, actual_fee)?
@@ -373,7 +401,7 @@ impl AccountTransaction {
             initial_gas: block_context.versioned_constants.os_constants.gas_costs.initial_gas_cost,
         };
 
-        let mut context = EntryPointExecutionContext::new_invoke(tx_context, true)?;
+        let mut context = EntryPointExecutionContext::new_invoke(tx_context, true);
 
         Ok(fee_transfer_call
             .execute(state, &mut ExecutionResources::default(), &mut context)
@@ -442,7 +470,7 @@ impl AccountTransaction {
             // Also, the execution context required form the `DeployAccount` execute phase is
             // validation context.
             let mut execution_context =
-                EntryPointExecutionContext::new_validate(tx_context.clone(), charge_fee)?;
+                EntryPointExecutionContext::new_validate(tx_context.clone(), charge_fee);
             execute_call_info =
                 self.run_execute(state, &mut resources, &mut execution_context, remaining_gas)?;
             validate_call_info = self.handle_validate_tx(
@@ -455,7 +483,7 @@ impl AccountTransaction {
             )?;
         } else {
             let mut execution_context =
-                EntryPointExecutionContext::new_invoke(tx_context.clone(), charge_fee)?;
+                EntryPointExecutionContext::new_invoke(tx_context.clone(), charge_fee);
             validate_call_info = self.handle_validate_tx(
                 state,
                 &mut resources,
@@ -499,7 +527,7 @@ impl AccountTransaction {
     ) -> TransactionExecutionResult<ValidateExecuteCallInfo> {
         let mut resources = ExecutionResources::default();
         let mut execution_context =
-            EntryPointExecutionContext::new_invoke(tx_context.clone(), charge_fee)?;
+            EntryPointExecutionContext::new_invoke(tx_context.clone(), charge_fee);
         // Run the validation, and if execution later fails, only keep the validation diff.
         let validate_call_info = self.handle_validate_tx(
             state,
@@ -644,14 +672,6 @@ impl AccountTransaction {
 
         self.run_revertible(state, tx_context, remaining_gas, validate, charge_fee)
     }
-
-    pub fn tx_hash(&self) -> TransactionHash {
-        match self {
-            AccountTransaction::Declare(tx) => tx.tx_hash(),
-            AccountTransaction::DeployAccount(tx) => tx.tx_hash(),
-            AccountTransaction::Invoke(tx) => tx.tx_hash(),
-        }
-    }
 }
 
 impl<U: UpdatableState> ExecutableTransaction<U> for AccountTransaction {
@@ -661,7 +681,7 @@ impl<U: UpdatableState> ExecutableTransaction<U> for AccountTransaction {
         block_context: &BlockContext,
         execution_flags: ExecutionFlags,
     ) -> TransactionExecutionResult<TransactionExecutionInfo> {
-        let tx_context = Arc::new(block_context.to_tx_context(self));
+        let tx_context = Arc::new(block_context.to_tx_context(self)?);
         self.verify_tx_version(tx_context.tx_info.version())?;
 
         // Nonce and fee check should be done before running user code.
@@ -718,7 +738,8 @@ impl<U: UpdatableState> ExecutableTransaction<U> for AccountTransaction {
 }
 
 impl TransactionInfoCreator for AccountTransaction {
-    fn create_tx_info(&self) -> TransactionInfo {
+    // TODO(Nimrod): This function should return `TransactionInfo` without a result.
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError> {
         match self {
             Self::Declare(tx) => tx.create_tx_info(),
             Self::DeployAccount(tx) => tx.create_tx_info(),
@@ -768,7 +789,7 @@ impl ValidatableTransaction for AccountTransaction {
         limit_steps_by_resources: bool,
     ) -> TransactionExecutionResult<Option<CallInfo>> {
         let mut context =
-            EntryPointExecutionContext::new_validate(tx_context, limit_steps_by_resources)?;
+            EntryPointExecutionContext::new_validate(tx_context, limit_steps_by_resources);
         let tx_info = &context.tx_context.tx_info;
         if tx_info.is_v0() {
             return Ok(None);

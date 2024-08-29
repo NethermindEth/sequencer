@@ -30,7 +30,7 @@ use crate::state::cached_state::TransactionalState;
 use crate::state::errors::StateError;
 use crate::state::state_api::{State, UpdatableState};
 use crate::transaction::constants;
-use crate::transaction::errors::TransactionExecutionError;
+use crate::transaction::errors::{TransactionExecutionError, TransactionInfoCreationError};
 use crate::transaction::objects::{
     CommonAccountFields,
     CurrentTransactionInfo,
@@ -268,7 +268,7 @@ impl<S: State> Executable<S> for DeclareTransaction {
 }
 
 impl TransactionInfoCreator for DeclareTransaction {
-    fn create_tx_info(&self) -> TransactionInfo {
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError> {
         // TODO(Nir, 01/11/2023): Consider to move this (from all get_tx_info methods).
         let common_fields = CommonAccountFields {
             transaction_hash: self.tx_hash(),
@@ -282,36 +282,34 @@ impl TransactionInfoCreator for DeclareTransaction {
         match &self.tx {
             starknet_api::transaction::DeclareTransaction::V0(tx)
             | starknet_api::transaction::DeclareTransaction::V1(tx) => {
-                TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+                Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
                     common_fields,
                     max_fee: tx.max_fee,
-                })
+                }))
             }
             starknet_api::transaction::DeclareTransaction::V2(tx) => {
-                TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+                Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
                     common_fields,
                     max_fee: tx.max_fee,
-                })
+                }))
             }
             starknet_api::transaction::DeclareTransaction::V3(tx) => {
-                TransactionInfo::Current(CurrentTransactionInfo {
+                Ok(TransactionInfo::Current(CurrentTransactionInfo {
                     common_fields,
-                    resource_bounds: tx.resource_bounds.clone(),
+                    resource_bounds: tx.resource_bounds.clone().try_into()?,
                     tip: tx.tip,
                     nonce_data_availability_mode: tx.nonce_data_availability_mode,
                     fee_data_availability_mode: tx.fee_data_availability_mode,
                     paymaster_data: tx.paymaster_data.clone(),
                     account_deployment_data: tx.account_deployment_data.clone(),
-                })
+                }))
             }
         }
     }
 }
 #[derive(Debug, Clone)]
 pub struct DeployAccountTransaction {
-    pub tx: starknet_api::transaction::DeployAccountTransaction,
-    pub tx_hash: TransactionHash,
-    pub contract_address: ContractAddress,
+    pub tx: starknet_api::executable_transaction::DeployAccountTransaction,
     // Indicates the presence of the only_query bit in the version.
     pub only_query: bool,
 }
@@ -322,7 +320,14 @@ impl DeployAccountTransaction {
         tx_hash: TransactionHash,
         contract_address: ContractAddress,
     ) -> Self {
-        Self { tx: deploy_account_tx, tx_hash, contract_address, only_query: false }
+        Self {
+            tx: starknet_api::executable_transaction::DeployAccountTransaction {
+                tx: deploy_account_tx,
+                tx_hash,
+                contract_address,
+            },
+            only_query: false,
+        }
     }
 
     pub fn new_for_query(
@@ -330,24 +335,29 @@ impl DeployAccountTransaction {
         tx_hash: TransactionHash,
         contract_address: ContractAddress,
     ) -> Self {
-        Self { tx: deploy_account_tx, tx_hash, contract_address, only_query: true }
+        Self {
+            tx: starknet_api::executable_transaction::DeployAccountTransaction {
+                tx: deploy_account_tx,
+                tx_hash,
+                contract_address,
+            },
+            only_query: true,
+        }
     }
 
     implement_inner_tx_getter_calls!(
         (class_hash, ClassHash),
         (constructor_calldata, Calldata),
+        (contract_address, ContractAddress),
         (contract_address_salt, ContractAddressSalt),
         (nonce, Nonce),
         (signature, TransactionSignature),
+        (tx_hash, TransactionHash),
         (version, TransactionVersion)
     );
 
     pub fn tx(&self) -> &starknet_api::transaction::DeployAccountTransaction {
-        &self.tx
-    }
-
-    pub fn tx_hash(&self) -> TransactionHash {
-        self.tx_hash
+        self.tx.tx()
     }
 }
 
@@ -363,7 +373,7 @@ impl<S: State> Executable<S> for DeployAccountTransaction {
         let ctor_context = ConstructorContext {
             class_hash,
             code_address: None,
-            storage_address: self.contract_address,
+            storage_address: self.contract_address(),
             caller_address: ContractAddress::default(),
         };
         let call_info = execute_deployment(
@@ -381,33 +391,33 @@ impl<S: State> Executable<S> for DeployAccountTransaction {
 }
 
 impl TransactionInfoCreator for DeployAccountTransaction {
-    fn create_tx_info(&self) -> TransactionInfo {
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError> {
         let common_fields = CommonAccountFields {
             transaction_hash: self.tx_hash(),
             version: self.version(),
             signature: self.signature(),
             nonce: self.nonce(),
-            sender_address: self.contract_address,
+            sender_address: self.contract_address(),
             only_query: self.only_query,
         };
 
-        match &self.tx {
+        match &self.tx() {
             starknet_api::transaction::DeployAccountTransaction::V1(tx) => {
-                TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+                Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
                     common_fields,
                     max_fee: tx.max_fee,
-                })
+                }))
             }
             starknet_api::transaction::DeployAccountTransaction::V3(tx) => {
-                TransactionInfo::Current(CurrentTransactionInfo {
+                Ok(TransactionInfo::Current(CurrentTransactionInfo {
                     common_fields,
-                    resource_bounds: tx.resource_bounds.clone(),
+                    resource_bounds: tx.resource_bounds.clone().try_into()?,
                     tip: tx.tip,
                     nonce_data_availability_mode: tx.nonce_data_availability_mode,
                     fee_data_availability_mode: tx.fee_data_availability_mode,
                     paymaster_data: tx.paymaster_data.clone(),
                     account_deployment_data: AccountDeploymentData::default(),
-                })
+                }))
             }
         }
     }
@@ -415,8 +425,7 @@ impl TransactionInfoCreator for DeployAccountTransaction {
 
 #[derive(Debug, Clone)]
 pub struct InvokeTransaction {
-    pub tx: starknet_api::transaction::InvokeTransaction,
-    pub tx_hash: TransactionHash,
+    pub tx: starknet_api::executable_transaction::InvokeTransaction,
     // Indicates the presence of the only_query bit in the version.
     pub only_query: bool,
 }
@@ -426,14 +435,20 @@ impl InvokeTransaction {
         invoke_tx: starknet_api::transaction::InvokeTransaction,
         tx_hash: TransactionHash,
     ) -> Self {
-        Self { tx: invoke_tx, tx_hash, only_query: false }
+        Self {
+            tx: starknet_api::executable_transaction::InvokeTransaction { tx: invoke_tx, tx_hash },
+            only_query: false,
+        }
     }
 
     pub fn new_for_query(
         invoke_tx: starknet_api::transaction::InvokeTransaction,
         tx_hash: TransactionHash,
     ) -> Self {
-        Self { tx: invoke_tx, tx_hash, only_query: true }
+        Self {
+            tx: starknet_api::executable_transaction::InvokeTransaction { tx: invoke_tx, tx_hash },
+            only_query: true,
+        }
     }
 
     implement_inner_tx_getter_calls!(
@@ -441,11 +456,12 @@ impl InvokeTransaction {
         (nonce, Nonce),
         (signature, TransactionSignature),
         (sender_address, ContractAddress),
+        (tx_hash, TransactionHash),
         (version, TransactionVersion)
     );
 
-    pub fn tx_hash(&self) -> TransactionHash {
-        self.tx_hash
+    pub fn tx(&self) -> &starknet_api::transaction::InvokeTransaction {
+        self.tx.tx()
     }
 }
 
@@ -457,7 +473,7 @@ impl<S: State> Executable<S> for InvokeTransaction {
         context: &mut EntryPointExecutionContext,
         remaining_gas: &mut u64,
     ) -> TransactionExecutionResult<Option<CallInfo>> {
-        let entry_point_selector = match &self.tx {
+        let entry_point_selector = match &self.tx.tx {
             starknet_api::transaction::InvokeTransaction::V0(tx) => tx.entry_point_selector,
             starknet_api::transaction::InvokeTransaction::V1(_)
             | starknet_api::transaction::InvokeTransaction::V3(_) => {
@@ -493,7 +509,7 @@ impl<S: State> Executable<S> for InvokeTransaction {
 }
 
 impl TransactionInfoCreator for InvokeTransaction {
-    fn create_tx_info(&self) -> TransactionInfo {
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError> {
         let common_fields = CommonAccountFields {
             transaction_hash: self.tx_hash(),
             version: self.version(),
@@ -503,29 +519,29 @@ impl TransactionInfoCreator for InvokeTransaction {
             only_query: self.only_query,
         };
 
-        match &self.tx {
+        match &self.tx() {
             starknet_api::transaction::InvokeTransaction::V0(tx) => {
-                TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+                Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
                     common_fields,
                     max_fee: tx.max_fee,
-                })
+                }))
             }
             starknet_api::transaction::InvokeTransaction::V1(tx) => {
-                TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+                Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
                     common_fields,
                     max_fee: tx.max_fee,
-                })
+                }))
             }
             starknet_api::transaction::InvokeTransaction::V3(tx) => {
-                TransactionInfo::Current(CurrentTransactionInfo {
+                Ok(TransactionInfo::Current(CurrentTransactionInfo {
                     common_fields,
-                    resource_bounds: tx.resource_bounds.clone(),
+                    resource_bounds: tx.resource_bounds.clone().try_into()?,
                     tip: tx.tip,
                     nonce_data_availability_mode: tx.nonce_data_availability_mode,
                     fee_data_availability_mode: tx.fee_data_availability_mode,
                     paymaster_data: tx.paymaster_data.clone(),
                     account_deployment_data: tx.account_deployment_data.clone(),
-                })
+                }))
             }
         }
     }
@@ -591,8 +607,8 @@ impl<S: State> Executable<S> for L1HandlerTransaction {
 }
 
 impl TransactionInfoCreator for L1HandlerTransaction {
-    fn create_tx_info(&self) -> TransactionInfo {
-        TransactionInfo::Deprecated(DeprecatedTransactionInfo {
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError> {
+        Ok(TransactionInfo::Deprecated(DeprecatedTransactionInfo {
             common_fields: CommonAccountFields {
                 transaction_hash: self.tx_hash,
                 version: self.tx.version,
@@ -602,6 +618,6 @@ impl TransactionInfoCreator for L1HandlerTransaction {
                 only_query: false,
             },
             max_fee: Fee::default(),
-        })
+        }))
     }
 }

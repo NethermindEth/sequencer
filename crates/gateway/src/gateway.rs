@@ -6,11 +6,14 @@ use async_trait::async_trait;
 use axum::extract::State;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use blockifier::execution::contract_class::ClassInfo;
+use starknet_api::executable_transaction::Transaction;
 use starknet_api::rpc_transaction::RpcTransaction;
 use starknet_api::transaction::TransactionHash;
 use starknet_mempool_infra::component_runner::{ComponentStartError, ComponentStarter};
 use starknet_mempool_types::communication::SharedMempoolClient;
 use starknet_mempool_types::mempool_types::{Account, AccountState, MempoolInput};
+use starknet_sierra_compile::config::SierraToCasmCompilationConfig;
 use tracing::{error, info, instrument};
 
 use crate::compilation::GatewayCompiler;
@@ -20,7 +23,6 @@ use crate::rpc_state_reader::RpcStateReaderFactory;
 use crate::state_reader::StateReaderFactory;
 use crate::stateful_transaction_validator::StatefulTransactionValidator;
 use crate::stateless_transaction_validator::StatelessTransactionValidator;
-use crate::utils::external_tx_to_thin_tx;
 
 #[cfg(test)]
 #[path = "gateway_test.rs"]
@@ -106,7 +108,7 @@ async fn add_tx(
         GatewaySpecError::UnexpectedError { data: "Internal server error".to_owned() }
     })??;
 
-    let tx_hash = mempool_input.tx.tx_hash;
+    let tx_hash = mempool_input.tx.tx_hash();
 
     app_state.mempool_client.add_tx(mempool_input).await.map_err(|e| {
         error!("Failed to send tx to mempool: {}", e);
@@ -130,9 +132,12 @@ fn process_tx(
 
     // Compile Sierra to Casm.
     let optional_class_info = match &tx {
-        RpcTransaction::Declare(declare_tx) => {
-            Some(gateway_compiler.process_declare_tx(declare_tx)?)
-        }
+        RpcTransaction::Declare(declare_tx) => Some(
+            ClassInfo::try_from(gateway_compiler.process_declare_tx(declare_tx)?).map_err(|e| {
+                error!("Failed to convert Starknet API ClassInfo to Blockifier ClassInfo: {:?}", e);
+                GatewaySpecError::UnexpectedError { data: "Internal server error.".to_owned() }
+            })?,
+        ),
         _ => None,
     };
 
@@ -143,7 +148,7 @@ fn process_tx(
 
     // TODO(Arni): Add the Sierra and the Casm to the mempool input.
     Ok(MempoolInput {
-        tx: external_tx_to_thin_tx(&tx, validate_info.tx_hash, validate_info.sender_address),
+        tx: Transaction::new_from_rpc_tx(tx, validate_info.tx_hash, validate_info.sender_address),
         account: Account {
             sender_address: validate_info.sender_address,
             state: AccountState { nonce: validate_info.account_nonce },
@@ -154,10 +159,11 @@ fn process_tx(
 pub fn create_gateway(
     config: GatewayConfig,
     rpc_state_reader_config: RpcStateReaderConfig,
-    gateway_compiler: GatewayCompiler,
+    compiler_config: SierraToCasmCompilationConfig,
     mempool_client: SharedMempoolClient,
 ) -> Gateway {
     let state_reader_factory = Arc::new(RpcStateReaderFactory { config: rpc_state_reader_config });
+    let gateway_compiler = GatewayCompiler::new_cairo_lang_compiler(compiler_config);
 
     Gateway::new(config, state_reader_factory, gateway_compiler, mempool_client)
 }

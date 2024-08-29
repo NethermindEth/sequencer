@@ -8,15 +8,15 @@ use starknet_api::core::{ContractAddress, Nonce};
 use starknet_api::data_availability::DataAvailabilityMode;
 use starknet_api::transaction::{
     AccountDeploymentData,
+    AllResourceBounds,
     Fee,
     PaymasterData,
-    Resource,
     ResourceBounds,
-    ResourceBoundsMapping,
     Tip,
     TransactionHash,
     TransactionSignature,
     TransactionVersion,
+    ValidResourceBounds,
 };
 use starknet_types_core::felt::Felt;
 use strum_macros::EnumIter;
@@ -38,6 +38,7 @@ use crate::transaction::constants;
 use crate::transaction::errors::{
     TransactionExecutionError,
     TransactionFeeError,
+    TransactionInfoCreationError,
     TransactionPreValidationError,
 };
 use crate::utils::{u128_from_usize, usize_from_u128};
@@ -100,14 +101,14 @@ impl TransactionInfo {
         TransactionVersion(query_version)
     }
 
-    pub fn enforce_fee(&self) -> TransactionFeeResult<bool> {
+    pub fn enforce_fee(&self) -> bool {
         match self {
             TransactionInfo::Current(context) => {
-                let l1_bounds = context.l1_resource_bounds()?;
+                let l1_bounds = context.l1_resource_bounds();
                 let max_amount: u128 = l1_bounds.max_amount.into();
-                Ok(max_amount * l1_bounds.max_price_per_unit > 0)
+                max_amount * l1_bounds.max_price_per_unit > 0
             }
-            TransactionInfo::Deprecated(context) => Ok(context.max_fee != Fee(0)),
+            TransactionInfo::Deprecated(context) => context.max_fee != Fee(0),
         }
     }
 }
@@ -125,7 +126,7 @@ impl HasRelatedFeeType for TransactionInfo {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CurrentTransactionInfo {
     pub common_fields: CommonAccountFields,
-    pub resource_bounds: ResourceBoundsMapping,
+    pub resource_bounds: ValidResourceBounds,
     pub tip: Tip,
     pub nonce_data_availability_mode: DataAvailabilityMode,
     pub fee_data_availability_mode: DataAvailabilityMode,
@@ -135,10 +136,12 @@ pub struct CurrentTransactionInfo {
 
 impl CurrentTransactionInfo {
     /// Fetch the L1 resource bounds, if they exist.
-    pub fn l1_resource_bounds(&self) -> TransactionFeeResult<ResourceBounds> {
-        match self.resource_bounds.0.get(&Resource::L1Gas).copied() {
-            Some(bounds) => Ok(bounds),
-            None => Err(TransactionFeeError::MissingL1GasBounds),
+    // TODO(Nimrod): Consider removing this function and add equivalent method to
+    // `ValidResourceBounds`.
+    pub fn l1_resource_bounds(&self) -> ResourceBounds {
+        match self.resource_bounds {
+            ValidResourceBounds::L1Gas(bounds) => bounds,
+            ValidResourceBounds::AllResources(AllResourceBounds { l1_gas, .. }) => l1_gas,
         }
     }
 }
@@ -149,6 +152,7 @@ pub struct DeprecatedTransactionInfo {
     pub max_fee: Fee,
 }
 
+#[cfg_attr(feature = "transaction_serde", derive(serde::Deserialize))]
 #[derive(
     derive_more::Add, derive_more::Sum, Clone, Copy, Debug, Default, Eq, PartialEq, Serialize,
 )]
@@ -208,6 +212,7 @@ pub struct CommonAccountFields {
 }
 
 /// Contains the information gathered by the execution of a transaction.
+#[cfg_attr(feature = "transaction_serde", derive(Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq)]
 pub struct TransactionExecutionInfo {
     /// Transaction validation call info; [None] for `L1Handler`.
@@ -266,7 +271,8 @@ impl ResourcesMapping {
     }
 }
 
-/// Containes all the L2 resources consumed by a transaction
+/// Contains all the L2 resources consumed by a transaction
+#[cfg_attr(feature = "transaction_serde", derive(Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StarknetResources {
     pub calldata_length: usize,
@@ -433,6 +439,7 @@ impl StarknetResources {
     }
 }
 
+#[cfg_attr(feature = "transaction_serde", derive(Serialize, serde::Deserialize))]
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct TransactionResources {
     pub starknet_resources: StarknetResources,
@@ -563,5 +570,5 @@ pub enum FeeType {
 }
 
 pub trait TransactionInfoCreator {
-    fn create_tx_info(&self) -> TransactionInfo;
+    fn create_tx_info(&self) -> Result<TransactionInfo, TransactionInfoCreationError>;
 }

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::channel::{mpsc, oneshot};
 use futures::sink::SinkExt;
 use futures::StreamExt;
-use papyrus_network::network_manager::BroadcastSubscriberSender;
+use papyrus_network::network_manager::BroadcastTopicSender;
 use papyrus_protobuf::consensus::{ConsensusMessage, Proposal, Vote};
 use papyrus_storage::body::BodyStorageReader;
 use papyrus_storage::header::HeaderStorageReader;
@@ -19,7 +19,14 @@ use starknet_api::core::ContractAddress;
 use starknet_api::transaction::Transaction;
 use tracing::{debug, debug_span, info, warn, Instrument};
 
-use crate::types::{ConsensusBlock, ConsensusContext, ConsensusError, ProposalInit, ValidatorId};
+use crate::types::{
+    ConsensusBlock,
+    ConsensusContext,
+    ConsensusError,
+    ProposalInit,
+    Round,
+    ValidatorId,
+};
 use crate::ProposalWrapper;
 
 // TODO: add debug messages and span to the tasks.
@@ -45,9 +52,9 @@ impl ConsensusBlock for PapyrusConsensusBlock {
 
 pub struct PapyrusConsensusContext {
     storage_reader: StorageReader,
-    network_broadcast_sender: BroadcastSubscriberSender<ConsensusMessage>,
+    network_broadcast_sender: BroadcastTopicSender<ConsensusMessage>,
     validators: Vec<ValidatorId>,
-    sync_broadcast_sender: Option<BroadcastSubscriberSender<Vote>>,
+    sync_broadcast_sender: Option<BroadcastTopicSender<Vote>>,
 }
 
 impl PapyrusConsensusContext {
@@ -55,9 +62,9 @@ impl PapyrusConsensusContext {
     #[allow(dead_code)]
     pub fn new(
         storage_reader: StorageReader,
-        network_broadcast_sender: BroadcastSubscriberSender<ConsensusMessage>,
+        network_broadcast_sender: BroadcastTopicSender<ConsensusMessage>,
         num_validators: u64,
-        sync_broadcast_sender: Option<BroadcastSubscriberSender<Vote>>,
+        sync_broadcast_sender: Option<BroadcastTopicSender<Vote>>,
     ) -> Self {
         Self {
             storage_reader,
@@ -181,7 +188,7 @@ impl ConsensusContext for PapyrusConsensusContext {
         self.validators.clone()
     }
 
-    fn proposer(&self, _validators: &[ValidatorId], _height: BlockNumber) -> ValidatorId {
+    fn proposer(&self, _height: BlockNumber, _round: Round) -> ValidatorId {
         *self.validators.first().expect("validators should have at least 2 validators")
     }
 
@@ -236,7 +243,7 @@ impl ConsensusContext for PapyrusConsensusContext {
         Ok(())
     }
 
-    async fn notify_decision(
+    async fn decision_reached(
         &mut self,
         block: Self::Block,
         precommits: Vec<Vote>,

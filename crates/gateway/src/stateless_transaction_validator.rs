@@ -1,12 +1,11 @@
 use starknet_api::rpc_transaction::{
-    ResourceBoundsMapping,
     RpcDeclareTransaction,
     RpcDeployAccountTransaction,
     RpcInvokeTransaction,
     RpcTransaction,
 };
 use starknet_api::state::EntryPoint;
-use starknet_api::transaction::Resource;
+use starknet_api::transaction::{AllResourceBounds, Resource};
 use starknet_types_core::felt::Felt;
 use tracing::{instrument, Level};
 
@@ -123,7 +122,8 @@ impl StatelessTransactionValidator {
     ) -> StatelessTransactionValidatorResult<()> {
         // Any patch version is valid. (i.e. when check version for upper bound, we ignore the Z
         // part in a version X.Y.Z).
-        let max_sierra_version = VersionId { patch: usize::MAX, ..self.config.max_sierra_version };
+        let mut max_sierra_version = self.config.max_sierra_version;
+        max_sierra_version.0.patch = usize::MAX;
 
         let sierra_version = VersionId::from_sierra_program(sierra_program)?;
         if self.config.min_sierra_version <= sierra_version && sierra_version <= max_sierra_version
@@ -175,13 +175,10 @@ impl StatelessTransactionValidator {
 }
 
 fn validate_resource_is_non_zero(
-    resource_bounds_mapping: &ResourceBoundsMapping,
+    all_resource_bounds: &AllResourceBounds,
     resource: Resource,
 ) -> StatelessTransactionValidatorResult<()> {
-    let resource_bounds = match resource {
-        Resource::L1Gas => resource_bounds_mapping.l1_gas,
-        Resource::L2Gas => resource_bounds_mapping.l2_gas,
-    };
+    let resource_bounds = all_resource_bounds.get_bound(resource);
     if resource_bounds.max_amount == 0 || resource_bounds.max_price_per_unit == 0 {
         return Err(StatelessTransactionValidatorError::ZeroResourceBounds {
             resource,

@@ -36,6 +36,7 @@ struct TransactionReceiptParameters<'a, T: Iterator<Item = &'a CallInfo> + Clone
 
 // TODO(Gilad): Use everywhere instead of passing the `actual_{fee,resources}` tuple, which often
 // get passed around together.
+#[cfg_attr(feature = "transaction_serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Debug, PartialEq)]
 pub struct TransactionReceipt {
     pub fee: Fee,
@@ -91,7 +92,7 @@ impl TransactionReceipt {
         )?;
 
         // L1 handler transactions are not charged an L2 fee but it is compared to the L1 fee.
-        let fee = if tx_context.tx_info.enforce_fee()? || tx_type == TransactionType::L1Handler {
+        let fee = if tx_context.tx_info.enforce_fee() || tx_type == TransactionType::L1Handler {
             tx_context.tx_info.get_fee_by_gas_vector(&tx_context.block_context.block_info, gas)
         } else {
             Fee(0)

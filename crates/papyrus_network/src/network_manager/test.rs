@@ -217,7 +217,7 @@ async fn register_sqmr_protocol_client_and_use_channels() {
     mock_swarm.first_polled_event_notifier = Some(event_notifier);
 
     // network manager to register subscriber
-    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm);
+    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm, None);
 
     // register subscriber and send payload
     let mut payload_sender = network_manager.register_sqmr_protocol_client::<Vec<u8>, Vec<u8>>(
@@ -236,7 +236,7 @@ async fn register_sqmr_protocol_client_and_use_channels() {
             .enumerate()
             .take(VEC1.len())
             .map(|(i, result)| {
-                let result = result.unwrap();
+                let result: Vec<_> = result.unwrap();
                 // this simulates how the mock swarm parses the query and sends responses to it
                 assert_eq!(result, vec![VEC1[i]]);
                 result
@@ -279,7 +279,7 @@ async fn process_incoming_query() {
     let get_responses_fut = mock_swarm.get_responses_sent_to_inbound_session(inbound_session_id);
     let mut get_supported_inbound_protocol_fut = mock_swarm.get_supported_inbound_protocol();
 
-    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm);
+    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm, None);
 
     let mut inbound_payload_receiver = network_manager
         .register_sqmr_protocol_server::<Vec<u8>, Vec<u8>>(protocol.to_string(), BUFFER_SIZE);
@@ -315,7 +315,7 @@ async fn broadcast_message() {
     let mut mock_swarm = MockSwarm::default();
     let mut messages_we_broadcasted_stream = mock_swarm.stream_messages_we_broadcasted();
 
-    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm);
+    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm, None);
 
     let mut messages_to_broadcast_sender = network_manager
         .register_broadcast_topic(topic.clone(), BUFFER_SIZE)
@@ -351,7 +351,7 @@ async fn receive_broadcasted_message_and_report_it() {
     )));
     let mut reported_peer_receiver = mock_swarm.get_reported_peers_stream();
 
-    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm);
+    let mut network_manager = GenericNetworkManager::generic_new(mock_swarm, None);
 
     let mut broadcasted_messages_receiver = network_manager
         .register_broadcast_topic::<Bytes>(topic.clone(), BUFFER_SIZE)
@@ -364,9 +364,9 @@ async fn receive_broadcasted_message_and_report_it() {
         // running while we call report_callback.
         reported_peer_result = tokio::time::timeout(TIMEOUT, broadcasted_messages_receiver.next())
             .then(|result| {
-                let (message_result, report_callback) = result.unwrap().unwrap();
+                let (message_result, broadcasted_message_manager) = result.unwrap().unwrap();
                 assert_eq!(message, message_result.unwrap());
-                report_callback.send(()).unwrap();
+                broadcasted_message_manager.report_peer();
                 tokio::time::timeout(TIMEOUT, reported_peer_receiver.next())
             }) => {
             assert_eq!(originated_peer_id, reported_peer_result.unwrap().unwrap());

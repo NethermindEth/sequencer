@@ -70,8 +70,7 @@ impl CallEntryPoint {
         let tx_context =
             TransactionContext { block_context: BlockContext::create_for_testing(), tx_info };
         let mut context =
-            EntryPointExecutionContext::new_invoke(Arc::new(tx_context), limit_steps_by_resources)
-                .unwrap();
+            EntryPointExecutionContext::new_invoke(Arc::new(tx_context), limit_steps_by_resources);
         self.execute(state, &mut ExecutionResources::default(), &mut context)
     }
 
@@ -99,8 +98,7 @@ impl CallEntryPoint {
         let mut context = EntryPointExecutionContext::new_validate(
             Arc::new(tx_context),
             limit_steps_by_resources,
-        )
-        .unwrap();
+        );
         self.execute(state, &mut ExecutionResources::default(), &mut context)
     }
 }
@@ -158,12 +156,20 @@ impl BlockInfo {
             block_number: BlockNumber(CURRENT_BLOCK_NUMBER),
             block_timestamp: BlockTimestamp(CURRENT_BLOCK_TIMESTAMP),
             sequencer_address: contract_address!(TEST_SEQUENCER_ADDRESS),
-            gas_prices: GasPrices {
-                eth_l1_gas_price: DEFAULT_ETH_L1_GAS_PRICE.try_into().unwrap(),
-                strk_l1_gas_price: DEFAULT_STRK_L1_GAS_PRICE.try_into().unwrap(),
-                eth_l1_data_gas_price: DEFAULT_ETH_L1_DATA_GAS_PRICE.try_into().unwrap(),
-                strk_l1_data_gas_price: DEFAULT_STRK_L1_DATA_GAS_PRICE.try_into().unwrap(),
-            },
+            gas_prices: GasPrices::new(
+                DEFAULT_ETH_L1_GAS_PRICE.try_into().unwrap(),
+                DEFAULT_STRK_L1_GAS_PRICE.try_into().unwrap(),
+                DEFAULT_ETH_L1_DATA_GAS_PRICE.try_into().unwrap(),
+                DEFAULT_STRK_L1_DATA_GAS_PRICE.try_into().unwrap(),
+                VersionedConstants::latest_constants()
+                    .l1_to_l2_gas_price_conversion(DEFAULT_ETH_L1_GAS_PRICE)
+                    .try_into()
+                    .unwrap(),
+                VersionedConstants::latest_constants()
+                    .l1_to_l2_gas_price_conversion(DEFAULT_STRK_L1_GAS_PRICE)
+                    .try_into()
+                    .unwrap(),
+            ),
             use_kzg_da: false,
         }
     }

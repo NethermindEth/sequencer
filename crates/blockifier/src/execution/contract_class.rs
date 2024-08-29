@@ -58,13 +58,9 @@ use crate::transaction::errors::TransactionExecutionError;
 #[path = "contract_class_test.rs"]
 pub mod test;
 
-/// Represents a runnable Starknet contract class (meaning, the program is runnable by the VM).
-/// We wrap the actual class in an Arc to avoid cloning the program when cloning the class.
-// Note: when deserializing from a SN API class JSON string, the ABI field is ignored
-// by serde, since it is not required for execution.
-
 pub type ContractClassResult<T> = Result<T, ContractClassError>;
 
+/// Represents a runnable Starknet contract class (meaning, the program is runnable by the VM).
 #[derive(Clone, Debug, PartialEq, derive_more::From)]
 pub enum ContractClass {
     V0(ContractClassV0),
@@ -72,14 +68,11 @@ pub enum ContractClass {
     V1Native(NativeContractClassV1),
 }
 
-impl TryFrom<starknet_api::contract_class::ContractClass> for ContractClass {
+impl TryFrom<CasmContractClass> for ContractClass {
     type Error = ProgramError;
 
-    fn try_from(
-        contract_class: starknet_api::contract_class::ContractClass,
-    ) -> Result<Self, Self::Error> {
-        let starknet_api::contract_class::ContractClass::V1(contract_class_v1) = contract_class;
-        Ok(ContractClass::V1(contract_class_v1.try_into()?))
+    fn try_from(contract_class: CasmContractClass) -> Result<Self, Self::Error> {
+        Ok(ContractClass::V1(contract_class.try_into()?))
     }
 }
 
@@ -123,6 +116,12 @@ impl ContractClass {
 }
 
 // V0.
+
+/// Represents a runnable Cario 0 Starknet contract class (meaning, the program is runnable by the
+/// VM). We wrap the actual class in an Arc to avoid cloning the program when cloning the
+/// class.
+// Note: when deserializing from a SN API class JSON string, the ABI field is ignored
+// by serde, since it is not required for execution.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct ContractClassV0(pub Arc<ContractClassV0Inner>);
 impl Deref for ContractClassV0 {
@@ -190,6 +189,10 @@ impl TryFrom<DeprecatedContractClass> for ContractClassV0 {
 }
 
 // V1.
+
+/// Represents a runnable Cario (Cairo 1) Starknet contract class (meaning, the program is runnable
+/// by the VM). We wrap the actual class in an Arc to avoid cloning the program when cloning the
+/// class.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractClassV1(pub Arc<ContractClassV1Inner>);
 impl Deref for ContractClassV1 {
@@ -288,7 +291,7 @@ pub fn estimate_casm_hash_computation_resources(
         NestedIntList::Leaf(length) => {
             // The entire contract is a single segment (old Sierra contracts).
             &ExecutionResources {
-                n_steps: 474,
+                n_steps: 463,
                 n_memory_holes: 0,
                 builtin_instance_counter: HashMap::from([(BuiltinName::poseidon, 10)]),
             } + &poseidon_hash_many_cost(*length)
@@ -296,7 +299,7 @@ pub fn estimate_casm_hash_computation_resources(
         NestedIntList::Node(segments) => {
             // The contract code is segmented by its functions.
             let mut execution_resources = ExecutionResources {
-                n_steps: 491,
+                n_steps: 480,
                 n_memory_holes: 0,
                 builtin_instance_counter: HashMap::from([(BuiltinName::poseidon, 11)]),
             };
@@ -387,18 +390,6 @@ impl EntryPointV1 {
     }
 }
 
-impl TryFrom<starknet_api::contract_class::ContractClassV1> for ContractClassV1 {
-    type Error = ProgramError;
-
-    fn try_from(
-        contract_class: starknet_api::contract_class::ContractClassV1,
-    ) -> Result<Self, Self::Error> {
-        let starknet_api::contract_class::ContractClassV1::Casm(casm_contract_class) =
-            contract_class;
-        casm_contract_class.try_into()
-    }
-}
-
 impl TryFrom<CasmContractClass> for ContractClassV1 {
     type Error = ProgramError;
 
@@ -482,8 +473,9 @@ pub fn deserialize_program<'de, D: Deserializer<'de>>(
 }
 
 // V1 utilities.
+
 // TODO(spapini): Share with cairo-lang-runner.
-fn hint_to_hint_params(hint: &Hint) -> Result<HintParams, ProgramError> {
+fn hint_to_hint_params(hint: &cairo_lang_casm::hints::Hint) -> Result<HintParams, ProgramError> {
     Ok(HintParams {
         code: serde_json::to_string(hint)?,
         accessible_scopes: vec![],
@@ -522,13 +514,16 @@ impl TryFrom<starknet_api::contract_class::ClassInfo> for ClassInfo {
 
     fn try_from(class_info: starknet_api::contract_class::ClassInfo) -> Result<Self, Self::Error> {
         let starknet_api::contract_class::ClassInfo {
-            contract_class,
+            casm_contract_class,
             sierra_program_length,
             abi_length,
         } = class_info;
 
-        let contract_class: ContractClass = contract_class.try_into()?;
-        Ok(Self { contract_class, sierra_program_length, abi_length })
+        Ok(Self {
+            contract_class: casm_contract_class.try_into()?,
+            sierra_program_length,
+            abi_length,
+        })
     }
 }
 
@@ -576,7 +571,6 @@ impl ClassInfo {
         }
     }
 }
-
 // Cairo-native utilities.
 
 #[derive(Clone, Debug, PartialEq)]

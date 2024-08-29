@@ -27,7 +27,7 @@ on:
 
 jobs:
   verify_cairo_file_dependencies:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install_rust

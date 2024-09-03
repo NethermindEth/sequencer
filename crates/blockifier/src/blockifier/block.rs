@@ -29,12 +29,12 @@ pub struct BlockInfo {
 
 #[derive(Clone, Debug)]
 pub struct GasPrices {
-    eth_l1_gas_price: NonZeroU128,       // In wei.
-    strk_l1_gas_price: NonZeroU128,      // In fri.
-    eth_l1_data_gas_price: NonZeroU128,  // In wei.
-    strk_l1_data_gas_price: NonZeroU128, // In fri.
-    eth_l2_gas_price: NonZeroU128,       // In wei.
-    strk_l2_gas_price: NonZeroU128,      // In fri.
+    pub eth_l1_gas_price: NonZeroU128,       // In wei.
+    pub strk_l1_gas_price: NonZeroU128,      // In fri.
+    pub eth_l1_data_gas_price: NonZeroU128,  // In wei.
+    pub strk_l1_data_gas_price: NonZeroU128, // In fri.
+    pub eth_l2_gas_price: NonZeroU128,       // In wei.
+    pub strk_l2_gas_price: NonZeroU128,      // In fri.
 }
 
 impl GasPrices {

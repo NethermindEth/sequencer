@@ -72,15 +72,11 @@ fn create_callinfo(
     syscall_handler: NativeSyscallHandler<'_>,
 ) -> Result<CallInfo, EntryPointExecutionError> {
     let gas_consumed = {
-        // We can use `.unwrap()` directly in both cases because the most significant bit is could
-        // be only 63 here (128 = 64 + 64).
-        let low: u64 = (run_result.remaining_gas & ((1u128 << 64) - 1)).try_into().unwrap();
-        let high: u64 = (run_result.remaining_gas >> 64).try_into().unwrap();
-        if high != 0 {
-            return Err(EntryPointExecutionError::NativeExecutionError {
+        let low: u64 = run_result.remaining_gas.try_into().map_err(|_| {
+            EntryPointExecutionError::NativeExecutionError {
                 info: "Overflow: gas consumed bigger than 64 bit".into(),
-            });
-        }
+            }
+        })?;
         call.initial_gas - low
     };
 

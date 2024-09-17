@@ -650,10 +650,9 @@ impl NativeContractClassV1Inner {
         // Therefore it's not enough to know the function index and we need enrich the contract
         // entry point with FunctionIds from SierraProgram.
         let lookup_fid: HashMap<usize, &FunctionId> =
-            HashMap::from_iter(sierra_program.funcs.iter().map(|fid| {
+            HashMap::from_iter(sierra_program.funcs.iter().enumerate().map(|(idx, func)| {
                 // This exception should never occur as the id is also in [SierraContractClass]
-                let id: usize = fid.id.id.try_into().expect("function id exceeds usize");
-                (id, &fid.id)
+                (idx, &func.id)
             }));
 
         Ok(NativeContractClassV1Inner {

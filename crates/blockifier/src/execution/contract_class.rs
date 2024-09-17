@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, Index};
+use std::path::Path;
 use std::sync::Arc;
 
 use cairo_lang_casm;
@@ -7,18 +8,17 @@ use cairo_lang_casm::hints::Hint;
 use cairo_lang_sierra::ids::FunctionId;
 use cairo_lang_starknet_classes::casm_contract_class::{CasmContractClass, CasmContractEntryPoint};
 use cairo_lang_starknet_classes::contract_class::{
-    ContractClass as SierraContractClass,
-    ContractEntryPoint,
+    ContractClass as SierraContractClass, ContractEntryPoint,
     ContractEntryPoints as SierraContractEntryPoints,
 };
 use cairo_lang_starknet_classes::NestedIntList;
 use cairo_lang_utils::bigint::BigUintAsHex;
-use cairo_native::executor::contract::ContractExecutor;
+use cairo_native::{
+    error::Result as CairoNativeResult,
+    executor::contract::ContractExecutor,
+};
 use cairo_vm::serde::deserialize_program::{
-    ApTracking,
-    FlowTrackingData,
-    HintParams,
-    ReferenceManager,
+    ApTracking, FlowTrackingData, HintParams, ReferenceManager,
 };
 use cairo_vm::types::builtin_name::BuiltinName;
 use cairo_vm::types::errors::program_errors::ProgramError;
@@ -27,16 +27,13 @@ use cairo_vm::types::relocatable::MaybeRelocatable;
 use cairo_vm::vm::runners::cairo_runner::ExecutionResources;
 use itertools::Itertools;
 use serde::de::Error as DeserializationError;
-use serde::{Deserialize, Deserializer};
-use starknet_api::block::BlockHash;
+use serde::{Deserialize, Deserializer, Serialize};
 use starknet_api::core::EntryPointSelector;
 use starknet_api::deprecated_contract_class::{
-    ContractClass as DeprecatedContractClass,
-    EntryPoint,
-    EntryPointOffset,
-    EntryPointType,
+    ContractClass as DeprecatedContractClass, EntryPoint, EntryPointOffset, EntryPointType,
     Program as DeprecatedProgram,
 };
+use starknet_api::hash::StarkHash as Hash;
 use starknet_types_core::felt::Felt;
 use starknet_types_core::hash::{Poseidon, StarkHash};
 
@@ -156,7 +153,7 @@ impl ContractClassV0 {
             + self.n_builtins()
             + self.bytecode_length()
             + 1; // Hinted class hash.
-        // The hashed data size is approximately the number of hashes (invoked in hash chains).
+                 // The hashed data size is approximately the number of hashes (invoked in hash chains).
         let n_steps = constants::N_STEPS_PER_PEDERSEN * hashed_data_size;
 
         ExecutionResources {
@@ -609,6 +606,15 @@ impl NativeContractClassV1 {
         Ok(Self(Arc::new(contract)))
     }
 
+    pub fn save(&self, to: impl AsRef<Path>) -> CairoNativeResult<()> {
+      self.0.save(to)
+    }
+
+    pub fn load(library_path: &Path) -> CairoNativeResult<Self> {
+      let inner = NativeContractClassV1Inner::load(library_path)?;
+      Ok(Self(Arc::new(inner)))
+    }
+
     /// Returns an entry point into the natively compiled contract.
     pub fn get_entrypoint(
         &self,
@@ -632,7 +638,7 @@ pub struct NativeContractClassV1Inner {
     pub executor: Arc<ContractExecutor>,
     entry_points_by_type: NativeContractEntryPoints,
     // Used for PartialEq
-    sierra_program_hash: BlockHash,
+    sierra_program_hash: Hash,
 }
 
 impl NativeContractClassV1Inner {
@@ -668,12 +674,32 @@ impl NativeContractClassV1Inner {
             ),
         })
     }
+
+    /// Save the library to the desired path, alongside it is saved also a json file with additional info.
+    pub fn save(&self, to: impl AsRef<Path>) -> CairoNativeResult<()> {
+        let meta_path = to.as_ref().join("entry_points_path.json");
+        let meta_info = (&self.entry_points_by_type, self.sierra_program_hash);
+        let info = serde_json::to_string(&meta_info)?;
+        std::fs::write(meta_path, info)?;
+        self.executor.save(to)
+    }
+
+    /// Load the executor from an already compiled library with the additional info json file.
+    pub fn load(library_path: &Path) -> CairoNativeResult<Self> {
+        // let info_str = std::fs::read_to_string(library_path.with_extension("json"))?;
+        let meta_path = library_path.join("entry_points_path.json");
+        let meta_string = std::fs::read_to_string(meta_path)?;
+        let (entry_points, hash): (NativeContractEntryPoints, Hash) =
+            serde_json::from_str(&meta_string)?;
+        let executor = Arc::new(ContractExecutor::load(library_path)?);
+        Ok(Self { executor, entry_points_by_type: entry_points, sierra_program_hash: hash })
+    }
 }
 
-fn calculate_sierra_program_hash(sierra: Vec<BigUintAsHex>) -> BlockHash {
+fn calculate_sierra_program_hash(sierra: Vec<BigUintAsHex>) -> Hash {
     let sierra_felts: Vec<Felt> =
         sierra.iter().map(|big_uint| &big_uint.value).map_into().collect();
-    BlockHash(Poseidon::hash_array(&sierra_felts))
+    Poseidon::hash_array(&sierra_felts)
 }
 
 // The location where the compiled contract is loaded into memory will not
@@ -685,7 +711,7 @@ impl PartialEq for NativeContractClassV1Inner {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 /// Modelled after [SierraContractEntryPoints]
 /// and enriched with information for the Cairo Native ABI.
 /// See Note [Cairo Native ABI]
@@ -736,7 +762,7 @@ impl Index<EntryPointType> for NativeContractEntryPoints {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 /// Provides a relation between a function in a contract and a compiled contract
 struct NativeEntryPoint {
     /// The selector is the key to find the function in the contract

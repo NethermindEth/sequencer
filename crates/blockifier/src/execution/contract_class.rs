@@ -649,11 +649,9 @@ impl NativeContractClassV1Inner {
         // function name is what is used by Cairo Native to lookup the function.
         // Therefore it's not enough to know the function index and we need enrich the contract
         // entry point with FunctionIds from SierraProgram.
-        let lookup_fid: HashMap<usize, &FunctionId> =
-            HashMap::from_iter(sierra_program.funcs.iter().enumerate().map(|(idx, func)| {
-                // This exception should never occur as the id is also in [SierraContractClass]
-                (idx, &func.id)
-            }));
+        let lookup_fid: HashMap<usize, &FunctionId> = HashMap::from_iter(
+            sierra_program.funcs.iter().enumerate().map(|(idx, func)| (idx, &func.id)),
+        );
 
         Ok(NativeContractClassV1Inner {
             executor,

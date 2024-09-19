@@ -146,6 +146,7 @@ fn get_deprecated_transaction_hashes(
 }
 
 /// Validates the hash of a starknet transaction.
+///
 /// For transactions on testnet or those with a low block_number, we validate the
 /// transaction hash against all potential historical hash computations. For recent
 /// transactions on mainnet, the hash is validated by calculating the precise hash

@@ -209,6 +209,8 @@ pub const L1_GAS: &str = "0x0000000000000000000000000000000000000000000000000000
 pub const L2_GAS: &str = "0x00000000000000000000000000000000000000000000000000004c325f474153";
 // "L1_DATA_GAS";
 pub const L1_DATA_GAS: &str = "0x0000000000000000000000000000000000004c315f444154415f474153";
+// "L1_DATA"
+pub const L1_DATA: &str = "0x00000000000000000000000000000000000000000000000000004c325f474153";
 // Failed to execute call
 pub const FAILED_TO_EXECUTE_CALL: &str = "0x004661696c656420746f20657865637574652063616c6c";
 // Failed to calculate address
@@ -473,7 +475,7 @@ impl<'a> SyscallHintProcessor<'a> {
     ) -> SyscallResult<(Relocatable, Relocatable)> {
         let l1_gas_as_felt = Felt::from_hex(L1_GAS).map_err(SyscallExecutionError::from)?;
         let l2_gas_as_felt = Felt::from_hex(L2_GAS).map_err(SyscallExecutionError::from)?;
-        let l1_data_gas_as_felt = Felt::from_hex(L1_DATA).map_err(SyscallExecutionError::from)?;
+        let l1_data_gas_as_felt = Felt::from_hex(L1_DATA_GAS).map_err(SyscallExecutionError::from)?;
 
         let l1_gas_bounds = tx_info.resource_bounds.get_l1_bounds();
         let l2_gas_bounds = tx_info.resource_bounds.get_l2_bounds();

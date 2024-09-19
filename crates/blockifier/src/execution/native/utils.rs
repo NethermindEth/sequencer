@@ -11,7 +11,7 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::ToBytes;
 use starknet_api::core::{ContractAddress, EntryPointSelector};
-use starknet_api::transaction::Resource;
+use starknet_api::transaction::{AllResourceBounds, ValidResourceBounds};
 use starknet_types_core::felt::Felt;
 
 use crate::execution::call_info::{CallExecution, CallInfo, Retdata};
@@ -169,28 +169,34 @@ pub fn default_tx_v2_info() -> TxV2Info {
 pub fn calculate_resource_bounds(
     tx_info: &CurrentTransactionInfo,
 ) -> SyscallResult<Vec<ResourceBounds>> {
-    let l1_gas = Felt::from_hex(L1_GAS).map_err(|e| encode_str_as_felts(&e.to_string()))?;
-    let l2_gas = Felt::from_hex(L2_GAS).map_err(|e| encode_str_as_felts(&e.to_string()))?;
+    let l1_gas_felt = Felt::from_hex(L1_GAS).map_err(|e| encode_str_as_felts(&e.to_string()))?;
+    let l2_gas_felt = Felt::from_hex(L2_GAS).map_err(|e| encode_str_as_felts(&e.to_string()))?;
     // TODO: Recheck correctness of L1_DATA_GAS
-    let l1_data_gas =
+    let l1_data_gas_felt =
         Felt::from_hex(L1_DATA_GAS).map_err(|e| encode_str_as_felts(&e.to_string()))?;
 
-    Ok(tx_info
-        .resource_bounds
-        .0
-        .iter()
-        .map(|(resource, resource_bound)| {
-            let resource = match resource {
-                Resource::L1Gas => l1_gas,
-                Resource::L2Gas => l2_gas,
-                Resource::L1DataGas => l1_data_gas,
-            };
+    let mut resource_bounds = vec![
+        ResourceBounds{
+            resource: l1_gas_felt,
+            max_amount: tx_info.resource_bounds.get_l1_bounds().max_amount,
+            max_price_per_unit: tx_info.resource_bounds.get_l1_bounds().max_price_per_unit,
+        },
+        ResourceBounds{
+            resource: l2_gas_felt,
+            max_amount: tx_info.resource_bounds.get_l2_bounds().max_amount,
+            max_price_per_unit: tx_info.resource_bounds.get_l2_bounds().max_price_per_unit,
+        },
+    ];
 
-            ResourceBounds {
-                resource,
-                max_amount: resource_bound.max_amount,
-                max_price_per_unit: resource_bound.max_price_per_unit,
-            }
-        })
-        .collect())
+    if let ValidResourceBounds::AllResources(AllResourceBounds { l1_data_gas, .. }) =
+        tx_info.resource_bounds
+    {
+        resource_bounds.push(ResourceBounds{
+            resource: l1_data_gas_felt,
+            max_amount: l1_data_gas.max_amount,
+            max_price_per_unit: l1_data_gas.max_price_per_unit,
+        });
+    }
+
+    Ok(resource_bounds)
 }

@@ -13,6 +13,7 @@ workspace = true
 concurrency = []
 jemalloc = ["dep:tikv-jemallocator"]
 testing = ["rand", "rstest"]
+transaction_serde = []
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -43,7 +44,7 @@ num-rational.workspace = true
 num-traits.workspace = true
 papyrus_config.workspace = true
 paste.workspace = true
-phf.workspace = true
+phf = { workspace = true, features = ["macros"] }
 rand = { workspace = true, optional = true }
 rstest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }

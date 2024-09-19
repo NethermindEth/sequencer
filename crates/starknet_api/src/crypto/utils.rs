@@ -9,6 +9,7 @@ use std::fmt;
 use std::fmt::LowerHex;
 
 use serde::{Deserialize, Serialize};
+use starknet_crypto::FieldElement;
 use starknet_types_core::felt::Felt;
 use starknet_types_core::hash::{Pedersen, Poseidon, StarkHash as CoreStarkHash};
 
@@ -55,18 +56,22 @@ pub fn verify_message_hash_signature(
     signature: &Signature,
     public_key: &PublicKey,
 ) -> Result<bool, CryptoError> {
-    starknet_crypto::verify(&public_key.0, message_hash, &signature.r, &signature.s).map_err(
-        |err| match err {
-            starknet_crypto::VerifyError::InvalidPublicKey => {
-                CryptoError::InvalidPublicKey(*public_key)
-            }
-            starknet_crypto::VerifyError::InvalidMessageHash => {
-                CryptoError::InvalidMessageHash(*message_hash)
-            }
-            starknet_crypto::VerifyError::InvalidR => CryptoError::InvalidR(signature.r),
-            starknet_crypto::VerifyError::InvalidS => CryptoError::InvalidS(signature.s),
-        },
+    starknet_crypto::verify(
+        &FieldElement::from_bytes_be(&public_key.0.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&message_hash.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&signature.r.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&signature.s.to_bytes_be()).unwrap(),
     )
+    .map_err(|err| match err {
+        starknet_crypto::VerifyError::InvalidPublicKey => {
+            CryptoError::InvalidPublicKey(*public_key)
+        }
+        starknet_crypto::VerifyError::InvalidMessageHash => {
+            CryptoError::InvalidMessageHash(*message_hash)
+        }
+        starknet_crypto::VerifyError::InvalidR => CryptoError::InvalidR(signature.r),
+        starknet_crypto::VerifyError::InvalidS => CryptoError::InvalidS(signature.s),
+    })
 }
 
 // Collect elements for applying hash chain.

@@ -287,7 +287,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
         let native_tx_info = TxInfo {
             version: tx_info.version().0,
             account_contract_address: contract_address_to_native_felt(tx_info.sender_address()),
-            max_fee: tx_info.max_fee().unwrap_or_default().0,
+            max_fee: tx_info.get_max_fee().0,
             signature: tx_info.signature().0,
             transaction_hash: tx_info.transaction_hash().0,
             chain_id: Felt::from_hex(

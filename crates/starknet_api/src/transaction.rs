@@ -952,6 +952,12 @@ pub enum ValidResourceBounds {
     AllResources(AllResourceBounds),
 }
 
+impl Default for ValidResourceBounds {
+    fn default() -> Self {
+        Self::AllResources(AllResourceBounds::default())
+    }
+}
+
 impl ValidResourceBounds {
     pub fn get_l1_bounds(&self) -> ResourceBounds {
         match self {

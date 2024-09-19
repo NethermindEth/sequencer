@@ -112,10 +112,14 @@ impl TransactionInfo {
         }
     }
 
-    pub fn max_fee(&self) -> TransactionFeeResult<Fee> {
+    pub fn get_max_fee(&self) -> Fee {
         match self {
-            Self::Current(_context) => Ok(Fee(0)),
-            Self::Deprecated(context) => Ok(context.max_fee),
+            TransactionInfo::Current(context) => {
+                let l1_bounds = context.l1_resource_bounds();
+                let max_amount: u128 = l1_bounds.max_amount.into();
+                Fee(max_amount)
+            }
+            TransactionInfo::Deprecated(context) => context.max_fee,
         }
     }
 }
@@ -413,13 +417,13 @@ impl StarknetResources {
             // Starknet's updateState gets the message segment as an argument.
             u128_from_usize(
                 self.message_cost_info.message_segment_length * eth_gas_constants::GAS_PER_MEMORY_WORD
-                    // Starknet's updateState increases a (storage) counter for each L2-to-L1 message.
-                    + n_l2_to_l1_messages * eth_gas_constants::GAS_PER_ZERO_TO_NONZERO_STORAGE_SET
-                    // Starknet's updateState decreases a (storage) counter for each L1-to-L2 consumed
-                    // message (note that we will probably get a refund of 15,000 gas for each consumed
-                    // message but we ignore it since refunded gas cannot be used for the current
-                    // transaction execution).
-                    + n_l1_to_l2_messages * eth_gas_constants::GAS_PER_COUNTER_DECREASE,
+                // Starknet's updateState increases a (storage) counter for each L2-to-L1 message.
+                + n_l2_to_l1_messages * eth_gas_constants::GAS_PER_ZERO_TO_NONZERO_STORAGE_SET
+                // Starknet's updateState decreases a (storage) counter for each L1-to-L2 consumed
+                // message (note that we will probably get a refund of 15,000 gas for each consumed
+                // message but we ignore it since refunded gas cannot be used for the current
+                // transaction execution).
+                + n_l1_to_l2_messages * eth_gas_constants::GAS_PER_COUNTER_DECREASE,
             ),
         ) + get_consumed_message_to_l2_emissions_cost(self.l1_handler_payload_size)
             + get_log_message_to_l1_emissions_cost(&self.message_cost_info.l2_to_l1_payload_lengths)
@@ -552,11 +556,11 @@ impl ExecutionResourcesTraits for ExecutionResources {
             // It is transformed into regular steps by the OS program - each instance requires
             // approximately 10 steps.
             + abi_constants::N_STEPS_PER_SEGMENT_ARENA_BUILTIN
-            * self
-            .builtin_instance_counter
-            .get(&BuiltinName::segment_arena)
-            .cloned()
-            .unwrap_or_default()
+                * self
+                    .builtin_instance_counter
+                    .get(&BuiltinName::segment_arena)
+                    .cloned()
+                    .unwrap_or_default()
     }
 
     fn prover_builtins(&self) -> HashMap<BuiltinName, usize> {

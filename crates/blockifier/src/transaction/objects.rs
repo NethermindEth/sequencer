@@ -149,7 +149,7 @@ impl Default for CurrentTransactionInfo {
     fn default() -> Self {
         Self {
             common_fields: Default::default(),
-            resource_bounds: Default::default(),
+            resource_bounds: ValidResourceBounds::L1Gas(Default::default()),
             tip: Default::default(),
             nonce_data_availability_mode: DataAvailabilityMode::L1,
             fee_data_availability_mode: DataAvailabilityMode::L1,

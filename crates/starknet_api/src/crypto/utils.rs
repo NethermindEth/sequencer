@@ -9,6 +9,7 @@ use std::fmt;
 use std::fmt::LowerHex;
 
 use serde::{Deserialize, Serialize};
+use starknet_crypto::FieldElement;
 use starknet_types_core::felt::Felt;
 use starknet_types_core::hash::{Pedersen, Poseidon, StarkHash as CoreStarkHash};
 
@@ -49,10 +50,6 @@ pub struct Signature {
     pub s: Felt,
 }
 
-fn to_field_element(felt: &Felt) -> starknet_crypto::FieldElement {
-    starknet_crypto::FieldElement::from_mont(felt.to_raw_reversed())
-}
-
 /// Verifies the authenticity of a signed message hash given the public key of the signer.
 pub fn verify_message_hash_signature(
     message_hash: &Felt,
@@ -60,10 +57,10 @@ pub fn verify_message_hash_signature(
     public_key: &PublicKey,
 ) -> Result<bool, CryptoError> {
     starknet_crypto::verify(
-        &to_field_element(&public_key.0),
-        &to_field_element(message_hash),
-        &to_field_element(&signature.r),
-        &to_field_element(&signature.s),
+        &FieldElement::from_bytes_be(&public_key.0.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&message_hash.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&signature.r.to_bytes_be()).unwrap(),
+        &FieldElement::from_bytes_be(&signature.s.to_bytes_be()).unwrap(),
     )
     .map_err(|err| match err {
         starknet_crypto::VerifyError::InvalidPublicKey => {

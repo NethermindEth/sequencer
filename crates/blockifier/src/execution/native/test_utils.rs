@@ -84,8 +84,7 @@ pub fn deploy_contract(
             }),
             ExecutionMode::Execute,
             false,
-        )
-        .unwrap(),
+        ),
         ctor_context,
         wrapper_calldata,
         u64::MAX,

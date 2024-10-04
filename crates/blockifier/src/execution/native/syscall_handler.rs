@@ -721,7 +721,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256k1_add_gas_cost,
         )?;
 
-        Ok(Secp256Point::add(&p0.into(), &p1.into()).into())
+        Ok(Secp256Point::add(p0.into(), p1.into()).into())
     }
 
     fn secp256k1_mul(
@@ -736,7 +736,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256k1_mul_gas_cost,
         )?;
 
-        Ok(Secp256Point::mul(&p.into(), m).into())
+        Ok(Secp256Point::mul(p.into(), m).into())
     }
 
     fn secp256k1_get_point_from_x(
@@ -795,7 +795,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256r1_add_gas_cost,
         )?;
 
-        Ok(Secp256Point::add(&p0.into(), &p1.into()).into())
+        Ok(Secp256Point::add(p0.into(), p1.into()).into())
     }
 
     fn secp256r1_mul(
@@ -810,7 +810,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256r1_mul_gas_cost,
         )?;
 
-        Ok(Secp256Point::mul(&p.into(), m).into())
+        Ok(Secp256Point::mul(p.into(), m).into())
     }
 
     fn secp256r1_get_point_from_x(
@@ -902,14 +902,14 @@ where
         Ok(maybe_affine(x.into(), y.into()))
     }
 
-    fn add(p0: &Self, p1: &Self) -> Self {
+    fn add(p0: Self, p1: Self) -> Self {
         let lhs: Affine<Curve> = p0.0;
         let rhs: Affine<Curve> = p1.0;
         let result: Projective<Curve> = lhs + rhs;
         Secp256Point(result.into())
     }
 
-    fn mul(p: &Self, m: U256) -> Self {
+    fn mul(p: Self, m: U256) -> Self {
         let p: Affine<Curve> = p.0;
         let result = p * Curve::ScalarField::from(u256_to_biguint(m));
         let result: Affine<Curve> = result.into();
@@ -947,7 +947,7 @@ where
     }
 }
 
-/// None panic version of [`Affine<Curve>::new`] that also maps (x,y) = (0,0) -> infinity
+/// Variation on [`Affine<Curve>::new`] that doesn't panic and maps (x,y) = (0,0) -> infinity
 fn maybe_affine<Curve: SWCurveConfig>(
     x: Curve::BaseField,
     y: Curve::BaseField,
@@ -967,7 +967,7 @@ fn maybe_affine<Curve: SWCurveConfig>(
 
 /// Data structure to tie together k1 and r1 points to it's corresponding
 /// Affine<Curve>
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 struct Secp256Point<Curve: SWCurveConfig>(Affine<Curve>);
 
 impl<Curve: SWCurveConfig> fmt::Debug for Secp256Point<Curve> {
@@ -1033,9 +1033,9 @@ mod test {
                 .unwrap()
                 .unwrap();
 
-        let p2 = Secp256Point::<_>::mul(&p1, U256 { lo: 0, hi: 0 });
+        let p2 = Secp256Point::mul(p1, U256 { lo: 0, hi: 0 });
         assert_eq!(p2.0.infinity, true);
 
-        assert_eq!(p1, Secp256Point::<_>::add(&p1, &p2));
+        assert_eq!(p1, Secp256Point::add(p1, p2));
     }
 }

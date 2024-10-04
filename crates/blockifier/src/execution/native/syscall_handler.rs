@@ -1,75 +1,45 @@
 use std::collections::HashSet;
+use std::fmt;
 use std::hash::RandomState;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use ark_ec::short_weierstrass::{Affine, Projective, SWCurveConfig};
 use cairo_native::starknet::{
-    BlockInfo,
-    ExecutionInfo,
-    ExecutionInfoV2,
-    Secp256k1Point,
-    Secp256r1Point,
-    StarknetSyscallHandler,
-    SyscallResult,
-    TxInfo,
-    TxV2Info,
-    U256,
+    BlockInfo, ExecutionInfo, ExecutionInfoV2, Secp256k1Point, Secp256r1Point,
+    StarknetSyscallHandler, SyscallResult, TxInfo, TxV2Info, U256,
 };
 use cairo_vm::vm::runners::cairo_runner::ExecutionResources;
 use num_traits::{ToPrimitive, Zero};
 use starknet_api::core::{
-    calculate_contract_address,
-    ClassHash,
-    ContractAddress,
-    EntryPointSelector,
-    EthAddress,
+    calculate_contract_address, ClassHash, ContractAddress, EntryPointSelector, EthAddress,
     PatriciaKey,
 };
 use starknet_api::data_availability::DataAvailabilityMode;
 use starknet_api::deprecated_contract_class::EntryPointType;
 use starknet_api::state::StorageKey;
 use starknet_api::transaction::{
-    Calldata,
-    ContractAddressSalt,
-    EventContent,
-    EventData,
-    EventKey,
-    L2ToL1Payload,
+    Calldata, ContractAddressSalt, EventContent, EventData, EventKey, L2ToL1Payload,
 };
 use starknet_types_core::felt::Felt;
 
 use super::utils::{
-    big4int_to_u256,
-    calculate_resource_bounds,
-    contract_address_to_native_felt,
-    default_tx_v2_info,
-    encode_str_as_felts,
-    u256_to_biguint,
+    big4int_to_u256, calculate_resource_bounds, contract_address_to_native_felt,
+    default_tx_v2_info, encode_str_as_felts, u256_to_biguint,
 };
 use crate::abi::constants;
 use crate::execution::call_info::{
-    CallInfo,
-    MessageToL1,
-    OrderedEvent,
-    OrderedL2ToL1Message,
-    Retdata,
+    CallInfo, MessageToL1, OrderedEvent, OrderedL2ToL1Message, Retdata,
 };
 use crate::execution::common_hints::ExecutionMode;
 use crate::execution::contract_class::ContractClass;
 use crate::execution::entry_point::{
-    CallEntryPoint,
-    CallType,
-    ConstructorContext,
-    EntryPointExecutionContext,
+    CallEntryPoint, CallType, ConstructorContext, EntryPointExecutionContext,
 };
 use crate::execution::execution_utils::{execute_deployment, max_fee_for_execution_info};
 use crate::execution::syscalls::hint_processor::{
-    SyscallCounter,
-    SyscallExecutionError,
-    BLOCK_NUMBER_OUT_OF_RANGE_ERROR,
-    INVALID_INPUT_LENGTH_ERROR,
-    OUT_OF_GAS_ERROR,
+    SyscallCounter, SyscallExecutionError, BLOCK_NUMBER_OUT_OF_RANGE_ERROR,
+    INVALID_INPUT_LENGTH_ERROR, OUT_OF_GAS_ERROR,
 };
 use crate::execution::syscalls::{exceeds_event_size_limit, SyscallSelector};
 use crate::state::state_api::State;
@@ -752,7 +722,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256k1_add_gas_cost,
         )?;
 
-        Ok(Secp256Point::add(p0.into(), p1.into()).into())
+        Ok(Secp256Point::add(&p0.into(), &p1.into()).into())
     }
 
     fn secp256k1_mul(
@@ -767,7 +737,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256k1_mul_gas_cost,
         )?;
 
-        Ok(Secp256Point::mul(p.into(), m).into())
+        Ok(Secp256Point::mul(&p.into(), m).into())
     }
 
     fn secp256k1_get_point_from_x(
@@ -826,7 +796,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256r1_add_gas_cost,
         )?;
 
-        Ok(Secp256Point::add(p0.into(), p1.into()).into())
+        Ok(Secp256Point::add(&p0.into(), &p1.into()).into())
     }
 
     fn secp256r1_mul(
@@ -841,7 +811,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().secp256r1_mul_gas_cost,
         )?;
 
-        Ok(Secp256Point::mul(p.into(), m).into())
+        Ok(Secp256Point::mul(&p.into(), m).into())
     }
 
     fn secp256r1_get_point_from_x(
@@ -901,6 +871,8 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
 
 use ark_ff::PrimeField;
 
+/// All these operation must match their counterpart in [`crate::execution::syscall::secp::SecpHintProcessor`]
+/// TODO: this is not entirely true as we made addition and multiplication an operation that never fails
 impl<Curve: SWCurveConfig> Secp256Point<Curve>
 where
     // It's not possible to directly constrain on
@@ -910,6 +882,11 @@ where
     Curve::BaseField: PrimeField, // constraint for get_point_by_id
     ark_ff::BigInt<4>: From<<Curve>::BaseField>, // constraint for point to bigint
 {
+    // Given a (x,y) pair it will
+    // - return the point at infinity for (0,0)
+    // - Err if either x or y is outside of the modulus
+    // - Ok(None) if (x,y) are within the modules but not on the curve
+    // - Ok(Some(Point)) if (x,y) are on the curve
     fn new(x: U256, y: U256) -> Result<Option<Self>, Vec<Felt>> {
         let x = u256_to_biguint(x);
         let y = u256_to_biguint(y);
@@ -928,7 +905,7 @@ where
         Ok(maybe_affine(x.into(), y.into()).map(|p| p.into()))
     }
 
-    fn add(p0: Secp256Point<Curve>, p1: Secp256Point<Curve>) -> Self {
+    fn add(p0: &Secp256Point<Curve>, p1: &Secp256Point<Curve>) -> Self {
         let lhs: Affine<Curve> = p0.into();
         let rhs: Affine<Curve> = p1.into();
         let result: Projective<Curve> = lhs + rhs;
@@ -936,7 +913,7 @@ where
         result.into()
     }
 
-    fn mul(p: Secp256Point<Curve>, m: U256) -> Self {
+    fn mul(p: &Secp256Point<Curve>, m: U256) -> Self {
         let p: Affine<Curve> = p.into();
         let result = p * Curve::ScalarField::from(u256_to_biguint(m));
         let result: Affine<Curve> = result.into();
@@ -974,12 +951,11 @@ where
     }
 }
 
-/// Similar to [`Affine<Curve>::new`], but with checks for 0 and doesn't panic.
+/// None panic version of [`Affine<Curve>::new`] that also maps (x,y) = (0,0) -> infinity
 fn maybe_affine<Curve: SWCurveConfig>(
     x: Curve::BaseField,
     y: Curve::BaseField,
 ) -> Option<Affine<Curve>> {
-    // use match for a better
     let ec_point = if x.is_zero() && y.is_zero() {
         Affine::<Curve>::identity()
     } else {
@@ -997,9 +973,26 @@ fn maybe_affine<Curve: SWCurveConfig>(
 /// With this data structure and its From instances we
 /// tie a hint processor to the corresponding Secp256k1 or Secp256r1 point.
 /// Thereby making the hint processor operations generic over the Secp256 point.
+#[derive(PartialEq)]
 enum Secp256Point<Config> {
     Infinity,
     Point { x: U256, y: U256, _phantom: PhantomData<Config> },
+}
+
+// Manual implmentation to get around the lack of Debug trait on
+// ark_secp256k1/r1.
+impl<Curve> fmt::Debug for Secp256Point<Curve> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Infinity => write!(f, "Infinity"),
+            Self::Point { x, y, _phantom } => f
+                .debug_struct("Point")
+                .field("x", x)
+                .field("y", y)
+                .field("_phantom", _phantom)
+                .finish(),
+        }
+    }
 }
 
 use std::convert::From;
@@ -1052,15 +1045,15 @@ impl From<Secp256r1Point> for Secp256Point<ark_secp256r1::Config> {
     }
 }
 
-impl<Curve: SWCurveConfig> From<Secp256Point<Curve>> for Affine<Curve>
+impl<Curve: SWCurveConfig> From<&Secp256Point<Curve>> for Affine<Curve>
 where
     Curve::BaseField: From<num_bigint::BigUint>,
 {
-    fn from(p: Secp256Point<Curve>) -> Self {
+    fn from(p: &Secp256Point<Curve>) -> Self {
         match p {
             Secp256Point::Infinity => Affine::<Curve>::identity(),
             Secp256Point::Point { x, y, _phantom } => {
-                Affine::<Curve>::new(u256_to_biguint(x).into(), u256_to_biguint(y).into())
+                Affine::<Curve>::new(u256_to_biguint(*x).into(), u256_to_biguint(*y).into())
             }
         }
     }
@@ -1081,5 +1074,25 @@ where
 
             Self::Point { x, y, _phantom: Default::default() }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cairo_native::starknet::U256;
+
+    use super::Secp256Point;
+
+    #[test]
+    fn infinity_test() {
+        let p1 =
+            Secp256Point::<ark_secp256k1::Config>::get_point_from_x(U256 { lo: 1, hi: 0 }, false)
+                .unwrap()
+                .unwrap();
+
+        let p2 = Secp256Point::<_>::mul(&p1, U256 { lo: 0, hi: 0 });
+        assert_eq!(p2, Secp256Point::Infinity);
+
+        assert_eq!(p1, Secp256Point::<_>::add(&p1, &p2));
     }
 }

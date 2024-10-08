@@ -1,3 +1,4 @@
+use num_traits::ToPrimitive;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 use rstest::rstest;
@@ -45,7 +46,8 @@ const INNER_CALL_CONTRACT_IN_CALL_CHAIN_OFFSET: usize = 117;
 #[rstest]
 fn test_stack_trace(
     block_context: BlockContext,
-    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1)] cairo_version: CairoVersion,
+    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1, CairoVersion::Native)]
+    cairo_version: CairoVersion,
 ) {
     let chain_info = ChainInfo::create_for_testing();
     let account = FeatureContract::AccountWithoutValidations(cairo_version);
@@ -84,66 +86,85 @@ fn test_stack_trace(
     )
     .unwrap_err();
 
-    // Fetch PC locations from the compiled contract to compute the expected PC locations in the
-    // traceback. Computation is not robust, but as long as the cairo function itself is not edited,
-    // this computation should be stable.
-    let account_entry_point_offset =
-        account.get_entry_point_offset(selector_from_name(EXECUTE_ENTRY_POINT_NAME));
     let execute_selector_felt = selector_from_name(EXECUTE_ENTRY_POINT_NAME).0;
-    let external_entry_point_selector_felt = selector_from_name(call_contract_function_name).0;
-    let entry_point_offset =
-        test_contract.get_entry_point_offset(selector_from_name(call_contract_function_name));
-    // Relative offsets of the test_call_contract entry point and the inner call.
-    let call_location = entry_point_offset.0 + 14;
-    let entry_point_location = entry_point_offset.0 - 3;
-    // Relative offsets of the account contract.
-    let account_call_location = account_entry_point_offset.0 + 18;
-    let account_entry_point_location = account_entry_point_offset.0 - 8;
 
-    let expected_trace_cairo0 = format!(
-        "Transaction execution has failed:
+    let expected_trace = match cairo_version {
+        CairoVersion::Cairo0 | CairoVersion::Cairo1 => {
+            // Fetch PC locations from the compiled contract to compute the expected PC locations in
+            // the traceback. Computation is not robust, but as long as the cairo
+            // function itself is not edited, this computation should be stable.
+            let account_entry_point_offset =
+                account.get_entry_point_offset(selector_from_name(EXECUTE_ENTRY_POINT_NAME));
+            let external_entry_point_selector_felt =
+                selector_from_name(call_contract_function_name).0;
+            let entry_point_offset = test_contract
+                .get_entry_point_offset(selector_from_name(call_contract_function_name));
+            // Relative offsets of the test_call_contract entry point and the inner call.
+            let call_location = entry_point_offset.0 + 14;
+            let entry_point_location = entry_point_offset.0 - 3;
+            // Relative offsets of the account contract.
+            let account_call_location = account_entry_point_offset.0 + 18;
+            let account_entry_point_location = account_entry_point_offset.0 - 8;
+
+            let expected_trace_cairo0 = format!(
+                "Transaction execution has failed:
 0: Error in the called contract (contract address: {account_address_felt:#064x}, class hash: \
-         {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
+                 {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
 Error at pc=0:7:
 Cairo traceback (most recent call last):
 Unknown location (pc=0:{account_call_location})
 Unknown location (pc=0:{account_entry_point_location})
 
 1: Error in the called contract (contract address: {test_contract_address_felt:#064x}, class hash: \
-         {test_contract_hash:#064x}, selector: {external_entry_point_selector_felt:#064x}):
+                 {test_contract_hash:#064x}, selector: \
+                 {external_entry_point_selector_felt:#064x}):
 Error at pc=0:37:
 Cairo traceback (most recent call last):
 Unknown location (pc=0:{call_location})
 Unknown location (pc=0:{entry_point_location})
 
 2: Error in the called contract (contract address: {test_contract_address_2_felt:#064x}, class \
-         hash: {test_contract_hash:#064x}, selector: {inner_entry_point_selector_felt:#064x}):
+                 hash: {test_contract_hash:#064x}, selector: \
+                 {inner_entry_point_selector_felt:#064x}):
 Error at pc=0:1184:
 Cairo traceback (most recent call last):
 Unknown location (pc=0:1188)
 
 An ASSERT_EQ instruction failed: 1 != 0.
 "
-    );
+            );
 
-    let expected_trace_cairo1 = format!(
-        "Transaction execution has failed:
+            let expected_trace_cairo1 = format!(
+                "Transaction execution has failed:
 0: Error in the called contract (contract address: {account_address_felt:#064x}, class hash: \
-         {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
+                 {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
 Error at pc=0:767:
 1: Error in the called contract (contract address: {test_contract_address_felt:#064x}, class hash: \
-         {test_contract_hash:#064x}, selector: {external_entry_point_selector_felt:#064x}):
+                 {test_contract_hash:#064x}, selector: \
+                 {external_entry_point_selector_felt:#064x}):
 Error at pc=0:612:
 2: Error in the called contract (contract address: {test_contract_address_2_felt:#064x}, class \
-         hash: {test_contract_hash:#064x}, selector: {inner_entry_point_selector_felt:#064x}):
+                 hash: {test_contract_hash:#064x}, selector: \
+                 {inner_entry_point_selector_felt:#064x}):
 Execution failed. Failure reason: 0x6661696c ('fail').
 "
-    );
+            );
 
-    let expected_trace = match cairo_version {
-        CairoVersion::Cairo0 => expected_trace_cairo0,
-        CairoVersion::Cairo1 => expected_trace_cairo1,
-        CairoVersion::Native => unreachable!("Native Cairo not supported here."),
+            match cairo_version {
+                CairoVersion::Cairo0 => expected_trace_cairo0,
+                CairoVersion::Cairo1 => expected_trace_cairo1,
+                CairoVersion::Native => unreachable!("Native Cairo not supported here."),
+            }
+        }
+        CairoVersion::Native => {
+            format!(
+                "Transaction execution has failed:
+0: Error in the called contract (contract address: {account_address_felt:#064x}, class hash: \
+                 {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
+Native execution error: Native execution error: Native execution error: fail
+",
+            )
+        }
     };
 
     assert_eq!(tx_execution_error.to_string(), expected_trace);
@@ -157,6 +178,9 @@ Execution failed. Failure reason: 0x6661696c ('fail').
 #[case(CairoVersion::Cairo1, "invoke_call_chain", "0x4469766973696f6e2062792030 ('Division by 0')", (0_u16, 0_u16)
 )]
 #[case(CairoVersion::Cairo1, "fail", "0x6661696c ('fail')", (0_u16, 0_u16))]
+#[case(CairoVersion::Native, "invoke_call_chain", "Division by 0", (0_u16, 0_u16)
+)]
+#[case(CairoVersion::Native, "fail", "fail", (0_u16, 0_u16))]
 fn test_trace_callchain_ends_with_regular_call(
     block_context: BlockContext,
     #[case] cairo_version: CairoVersion,
@@ -267,7 +291,13 @@ Execution failed. Failure reason: {expected_error}.
             )
         }
         CairoVersion::Native => {
-            unreachable!("Native Cairo not supported here.")
+            format!(
+                "Transaction execution has failed:
+0: Error in the called contract (contract address: {account_address_felt:#064x}, class hash: \
+                 {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
+Native execution error: Native execution error: Native execution error: {expected_error}
+",
+            )
         }
     };
 
@@ -290,6 +320,14 @@ Execution failed. Failure reason: {expected_error}.
 #[case(CairoVersion::Cairo1, "fail", "0x6661696c ('fail')", 0_u8, 0_u8, (9631_u16, 9631_u16, 0_u16, 0_u16)
 )]
 #[case(CairoVersion::Cairo1, "fail", "0x6661696c ('fail')", 0_u8, 1_u8, (9631_u16, 9700_u16, 0_u16, 0_u16)
+)]
+#[case(CairoVersion::Native, "invoke_call_chain", "Division by 0", 1_u8, 0_u8, (0_u16, 0_u16, 0_u16, 0_u16)
+)]
+#[case(CairoVersion::Native, "invoke_call_chain", "Division by 0", 1_u8, 1_u8, (0_u16, 0_u16, 0_u16, 0_u16)
+)]
+#[case(CairoVersion::Native, "fail", "fail", 0_u8, 0_u8, (0_u16, 0_u16, 0_u16, 0_u16)
+)]
+#[case(CairoVersion::Native, "fail", "fail", 0_u8, 1_u8, (0_u16, 0_u16, 0_u16, 0_u16)
 )]
 fn test_trace_call_chain_with_syscalls(
     block_context: BlockContext,
@@ -436,7 +474,14 @@ Execution failed. Failure reason: {expected_error}.
             )
         }
         CairoVersion::Native => {
-            unreachable!("Native Cairo not supported here.")
+            format!(
+                "Transaction execution has failed:
+0: Error in the called contract (contract address: {account_address_felt:#064x}, class hash: \
+                 {account_contract_hash:#064x}, selector: {execute_selector_felt:#064x}):
+Native execution error: Native execution error: Native execution error: Native execution error: \
+                 {expected_error}
+",
+            )
         }
     };
 
@@ -485,7 +530,8 @@ fn test_validate_trace(
     #[case] tx_type: TransactionType,
     #[case] entry_point_name: &str,
     #[case] tx_version: TransactionVersion,
-    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1)] cairo_version: CairoVersion,
+    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1, CairoVersion::Native)]
+    cairo_version: CairoVersion,
 ) {
     let create_for_account_testing = &BlockContext::create_for_account_testing();
     let block_context = create_for_account_testing;
@@ -539,7 +585,14 @@ Execution failed. Failure reason: 0x496e76616c6964207363656e6172696f ('Invalid s
 ",
             class_hash.0
         ),
-        CairoVersion::Native => unreachable!("Native Cairo not supported here."),
+        CairoVersion::Native => format!(
+            "Transaction validation has failed:
+0: Error in the called contract (contract address: {contract_address:#064x}, class hash: {:#064x}, \
+             selector: {selector:#064x}):
+Native execution error: Invalid scenario
+",
+            class_hash.0
+        ),
     };
 
     // Clean pc locations from the trace.
@@ -557,7 +610,8 @@ Execution failed. Failure reason: 0x496e76616c6964207363656e6172696f ('Invalid s
 /// traceback (including correct class hash, contract address and constructor entry point selector).
 fn test_account_ctor_frame_stack_trace(
     block_context: BlockContext,
-    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1)] cairo_version: CairoVersion,
+    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1, CairoVersion::Native)]
+    cairo_version: CairoVersion,
 ) {
     let chain_info = &block_context.chain_info;
     let faulty_account = FeatureContract::FaultyAccount(cairo_version);
@@ -584,28 +638,40 @@ fn test_account_ctor_frame_stack_trace(
 
     let expected_selector = selector_from_name(CONSTRUCTOR_ENTRY_POINT_NAME).0;
     let expected_address = deploy_address.0.key();
-    let expected_error = format!(
-        "Contract constructor execution has failed:
-0: Error in the contract class constructor (contract address: {expected_address:#064x}, class \
-         hash: {:#064x}, selector: {expected_selector:#064x}):
-",
-        class_hash.0
-    ) + match cairo_version {
+    let expected_error = match cairo_version {
         CairoVersion::Cairo0 => {
-            "Error at pc=0:223:
+            format!(
+                "Contract constructor execution has failed:
+0: Error in the contract class constructor (contract address: {expected_address:#064x}, class \
+                 hash: {:#064x}, selector: {expected_selector:#064x}):
+Error at pc=0:223:
 Cairo traceback (most recent call last):
 Unknown location (pc=0:195)
 Unknown location (pc=0:179)
 
 An ASSERT_EQ instruction failed: 1 != 0.
-"
+",
+                class_hash.0
+            )
         }
         CairoVersion::Cairo1 => {
-            "Execution failed. Failure reason: 0x496e76616c6964207363656e6172696f ('Invalid \
-             scenario').
-"
+            format!(
+                "Contract constructor execution has failed:
+0: Error in the contract class constructor (contract address: {expected_address:#064x}, class \
+                 hash: {:#064x}, selector: {expected_selector:#064x}):
+Execution failed. Failure reason: 0x496e76616c6964207363656e6172696f ('Invalid scenario').
+",
+                class_hash.0
+            )
         }
-        CairoVersion::Native => unreachable!("Native Cairo not supported here."),
+        CairoVersion::Native => format!(
+            "Contract constructor execution has failed:
+0: Error in the contract class constructor (contract address: {expected_address:#064x}, class \
+             hash: {:#064x}, selector: {expected_selector:#064x}):
+Native execution error: Invalid scenario
+",
+            class_hash.0
+        ),
     };
 
     // Compare expected and actual error.
@@ -620,7 +686,8 @@ An ASSERT_EQ instruction failed: 1 != 0.
 fn test_contract_ctor_frame_stack_trace(
     block_context: BlockContext,
     max_resource_bounds: DeprecatedResourceBoundsMapping,
-    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1)] cairo_version: CairoVersion,
+    #[values(CairoVersion::Cairo0, CairoVersion::Cairo1, CairoVersion::Native)]
+    cairo_version: CairoVersion,
 ) {
     let chain_info = &block_context.chain_info;
     let account = FeatureContract::AccountWithoutValidations(cairo_version);
@@ -686,6 +753,7 @@ fn test_contract_ctor_frame_stack_trace(
             faulty_class_hash.0, ctor_selector.0
         ),
     );
+
     let (execute_offset, deploy_offset, ctor_offset) = (
         account.get_entry_point_offset(execute_selector).0,
         account.get_entry_point_offset(deploy_contract_selector).0,
@@ -738,7 +806,21 @@ Execution failed. Failure reason: 0x496e76616c6964207363656e6172696f ('Invalid s
                 deploy_offset + 194
             )
         }
-        CairoVersion::Native => unreachable!("Native Cairo not supported here."),
+        CairoVersion::Native => {
+            let frame_2_native = format!(
+                "Error in the contract class {} constructor (selector: {:?}, address: {:?})",
+                faulty_class_hash.0.to_u64().unwrap(),
+                Some(ctor_selector),
+                expected_deployed_address
+            );
+
+            format!(
+                "{frame_0}
+Native execution error: Native execution error: {frame_2_native}: Native execution error: Invalid \
+                 scenario
+"
+            )
+        }
     };
 
     // Compare expected and actual error.

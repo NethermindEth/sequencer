@@ -16,17 +16,17 @@ setup_llvm_deps() {
 	case "$(uname)" in
 	Darwin)
 		brew update
-		brew install llvm@18
+		brew install llvm@19
 
 		LIBRARY_PATH=/opt/homebrew/lib
-		MLIR_SYS_180_PREFIX="$(brew --prefix llvm@18)"
-		LLVM_SYS_181_PREFIX="$MLIR_SYS_180_PREFIX"
-		TABLEGEN_180_PREFIX="$MLIR_SYS_180_PREFIX"
+		MLIR_SYS_190_PREFIX="$(brew --prefix llvm@18)"
+		LLVM_SYS_190_PREFIX="$MLIR_SYS_190_PREFIX"
+		TABLEGEN_190_PREFIX="$MLIR_SYS_190_PREFIX"
 
 		export LIBRARY_PATH
-		export MLIR_SYS_180_PREFIX
-		export LLVM_SYS_181_PREFIX
-		export TABLEGEN_180_PREFIX
+		export MLIR_SYS_190_PREFIX
+		export LLVM_SYS_190_PREFIX
+		export TABLEGEN_190_PREFIX
 		;;
 	Linux)
     export DEBIAN_FRONTEND=noninteractive
@@ -35,22 +35,22 @@ setup_llvm_deps() {
 		CODENAME=$(grep VERSION_CODENAME /etc/os-release | cut -d= -f2)
 		[ -z "$CODENAME" ] && { echo "Error: Unable to determine OS codename"; exit 1; }
 
-		echo "deb http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-18 main" > /etc/apt/sources.list.d/llvm-18.list
-		echo "deb-src http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-18 main" >> /etc/apt/sources.list.d/llvm-18.list
+		echo "deb http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-19 main" > /etc/apt/sources.list.d/llvm-19.list
+		echo "deb-src http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-19 main" >> /etc/apt/sources.list.d/llvm-19.list
 		wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 
     apt-get update && apt-get upgrade -y
     apt-get install -y zstd
-    apt-get install -y llvm-18 llvm-18-dev llvm-18-runtime clang-18 clang-tools-18 lld-18 libpolly-18-dev libmlir-18-dev mlir-18-tools
+    apt-get install -y llvm-19 llvm-19-dev llvm-19-runtime clang-19 clang-tools-19 lld-19 libpolly-19-dev libmlir-19-dev mlir-19-tools
     apt-get install -y libgmp3-dev
 
-		MLIR_SYS_180_PREFIX=/usr/lib/llvm-18/
-		LLVM_SYS_181_PREFIX=/usr/lib/llvm-18/
-		TABLEGEN_180_PREFIX=/usr/lib/llvm-18/
+		MLIR_SYS_190_PREFIX=/usr/lib/llvm-19/
+		LLVM_SYS_190_PREFIX=/usr/lib/llvm-19/
+		TABLEGEN_190_PREFIX=/usr/lib/llvm-19/
 
-		export MLIR_SYS_180_PREFIX
-		export LLVM_SYS_181_PREFIX
-		export TABLEGEN_180_PREFIX
+		export MLIR_SYS_190_PREFIX
+		export LLVM_SYS_190_PREFIX
+		export TABLEGEN_190_PREFIX
 		;;
 	*)
 		echo "Error: Unsupported operating system"
@@ -60,9 +60,9 @@ setup_llvm_deps() {
 
 	# GitHub Actions specific
 	[ -n "$GITHUB_ACTIONS" ] && {
-    echo "MLIR_SYS_180_PREFIX=$MLIR_SYS_180_PREFIX" >> $GITHUB_ENV
-    echo "LLVM_SYS_181_PREFIX=$LLVM_SYS_181_PREFIX" >> $GITHUB_ENV
-    echo "TABLEGEN_180_PREFIX=$TABLEGEN_180_PREFIX" >> $GITHUB_ENV
+    echo "MLIR_SYS_190_PREFIX=$MLIR_SYS_190_PREFIX" >> $GITHUB_ENV
+    echo "LLVM_SYS_190_PREFIX=$LLVM_SYS_190_PREFIX" >> $GITHUB_ENV
+    echo "TABLEGEN_190_PREFIX=$TABLEGEN_190_PREFIX" >> $GITHUB_ENV
 	}
 }
 

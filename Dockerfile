@@ -33,20 +33,20 @@ RUN curl -L "https://github.com/protocolbuffers/protobuf/releases/download/v$PRO
 ENV PROTOC=/root/.local/bin/protoc
 
 # Install LLVM 18
-RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" > /etc/apt/sources.list.d/llvm-18.list
-RUN echo "deb-src http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm-18.list
+RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" > /etc/apt/sources.list.d/llvm-19.list
+RUN echo "deb-src http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm-19.list
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 
 RUN apt update -y && apt install -y --ignore-missing --allow-downgrades \
     libmlir-18-dev \
     libpolly-18-dev \
-    llvm-18-dev \
+    llvm-19-dev \
     mlir-18-tools \
     clang-18
 
-ENV MLIR_SYS_180_PREFIX=/usr/lib/llvm-18/
-ENV LLVM_SYS_181_PREFIX=/usr/lib/llvm-18/
-ENV TABLEGEN_180_PREFIX=/usr/lib/llvm-18/
+ENV MLIR_SYS_180_PREFIX=/usr/lib/llvm-19/
+ENV LLVM_SYS_181_PREFIX=/usr/lib/llvm-19/
+ENV TABLEGEN_180_PREFIX=/usr/lib/llvm-19/
 
 #####################
 # Stage 1 (planer): #

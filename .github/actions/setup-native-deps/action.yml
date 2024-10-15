@@ -24,5 +24,5 @@ runs:
       shell: bash
       run: |
         echo "MLIR_SYS_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
-        echo "LLVM_SYS_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
+        echo "LLVM_SYS_191_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
         echo "TABLEGEN_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV

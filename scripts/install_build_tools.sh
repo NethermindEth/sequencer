@@ -1,6 +1,7 @@
 #!/bin/env bash
 
 set -e
+set -x
 
 [[ ${UID} == "0" ]] || SUDO="sudo"
 

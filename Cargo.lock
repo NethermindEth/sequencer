@@ -1698,8 +1698,9 @@ dependencies = [
 
 [[package]]
 name = "cairo-native"
-version = "0.2.0-alpha.3"
-source = "git+https://github.com/lambdaclass/cairo_native?rev=951a76b6387ff501589b70f0b0fd98d1f4b91242#951a76b6387ff501589b70f0b0fd98d1f4b91242"
+version = "0.2.0-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3623d7ea61c1ab6c734fc7801e8aa1756f2759d1c8cdcc8413335b8a9da2f4df"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -1710,7 +1711,6 @@ dependencies = [
  "bumpalo",
  "cairo-lang-compiler",
  "cairo-lang-defs",
- "cairo-lang-diagnostics",
  "cairo-lang-filesystem",
  "cairo-lang-runner",
  "cairo-lang-semantic",
@@ -1752,13 +1752,13 @@ dependencies = [
 
 [[package]]
 name = "cairo-native-runtime"
-version = "0.2.0-alpha.3"
-source = "git+https://github.com/lambdaclass/cairo_native?rev=951a76b6387ff501589b70f0b0fd98d1f4b91242#951a76b6387ff501589b70f0b0fd98d1f4b91242"
+version = "0.2.0-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec29c9429695c4ef18dbe3cff569afbb9eaa777fd4cf363fd194e1911fea18a7"
 dependencies = [
  "cairo-lang-sierra-gas",
  "itertools 0.13.0",
  "lazy_static",
- "libc",
  "num-traits 0.2.19",
  "rand 0.8.5",
  "starknet-curve 0.5.1",

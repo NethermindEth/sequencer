@@ -54,3 +54,9 @@ install_pypy &
 install_rust &
 wait
 ./dependencies.sh
+
+ls -lsah /var/
+ls -lsah /var/tmp
+ls -lsah /var/tmp/rust
+ls -lsah /var/tmp/rust/tmp
+id

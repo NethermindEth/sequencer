@@ -49,5 +49,11 @@ jobs:
       - name: Set up Native Dependencies
         uses: ./.github/actions/setup-native-deps
         id: native-deps
+      - name: Debug ls
+        run: ls -la
+      - name: Debug pwd
+        run: pwd
+      - name: Debug CAIRO_NATIVE_LIBRARY_PATH
+        run: echo "CAIRO_NATIVE_LIBRARY_PATH=${CAIRO_NATIVE_LIBRARY_PATH}"
       - run: cargo build -p blockifier
       - run: cargo test -p blockifier

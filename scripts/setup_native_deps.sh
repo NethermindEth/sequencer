@@ -95,10 +95,10 @@ install_cairo_native_runtime() {
 	cargo build -p cairo-native-runtime --release --all-features --quiet
 	popd || exit 1
 
-	mv ./cairo_native/target/release/libcairo_native_runtime.a ./libcairo_native_runtime.so
+	mv ./cairo_native/target/release/libcairo_native_runtime.a ./libcairo_native_runtime.a
 	rm -rf ./cairo_native
 
-	export CAIRO_NATIVE_RUNTIME_LIBRARY="$(pwd)/libcairo_native_runtime.so"
+	export CAIRO_NATIVE_RUNTIME_LIBRARY="$(pwd)/libcairo_native_runtime.a"
 
   echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY"
 

@@ -15,7 +15,7 @@ runs:
         sudo ./scripts/setup_native_deps.sh
 
     - name: Build Cairo Native Runtime
-      id: set-runtime-deps
+      id: build-runtime-lib
       shell: bash
       run: |
         ./scripts/build_cairo_native_runtime_lib.sh

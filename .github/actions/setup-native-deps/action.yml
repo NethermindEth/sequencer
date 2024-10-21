@@ -13,6 +13,7 @@ runs:
       shell: bash
       run: |
         sudo ./scripts/setup_native_deps.sh
+        ./scripts/setup_native_deps.sh
 
     - name: Set Environment Variables
       id: set-env-vars

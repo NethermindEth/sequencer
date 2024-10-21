@@ -1,11 +1,6 @@
 name: "Setup Cairo Native Dependencies"
 description: "Sets up LLVM and GMP libraries"
 
-outputs:
-  cairo-native-runtime-library:
-    description: "The path to the cairo native runtime library"
-    value: ${{ steps.set-env-vars.outputs.cairo-native-runtime-library }}
-
 runs:
   using: "composite"
   steps:
@@ -25,5 +20,4 @@ runs:
       run: |
         echo "MLIR_SYS_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
         echo "LLVM_SYS_191_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
-        echo "TABLEGEN_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
-        echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$(pwd)" >> $GITHUB_ENV &&
+        echo "TABLEGEN_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV

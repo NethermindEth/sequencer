@@ -98,11 +98,11 @@ install_cairo_native_runtime() {
 	mv ./cairo_native/target/release/libcairo_native_runtime.a ./libcairo_native_runtime.so
 	rm -rf ./cairo_native
 
-	export CAIRO_NATIVE_RUNTIME_LIBRARY="$(pwd)/libcairo_native_runtime.so"
-
-  echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY"
-
-	[ -n "$GITHUB_ACTIONS" ] && echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY" >> $GITHUB_ENV
+#	export CAIRO_NATIVE_RUNTIME_LIBRARY="./libcairo_native_runtime.so"
+#
+#  echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY"
+#
+#	[ -n "$GITHUB_ACTIONS" ] && echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY" >> $GITHUB_ENV
 }
 
 main() {

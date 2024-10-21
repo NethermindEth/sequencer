@@ -23,6 +23,6 @@ runs:
       id: set-env-vars
       shell: bash
       run: |
-        echo "MLIR_SYS_180_PREFIX=/usr/lib/llvm-18/" >> $GITHUB_ENV &&
-        echo "LLVM_SYS_181_PREFIX=/usr/lib/llvm-18/" >> $GITHUB_ENV &&
-        echo "TABLEGEN_180_PREFIX=/usr/lib/llvm-18/" >> $GITHUB_ENV
+        echo "MLIR_SYS_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
+        echo "LLVM_SYS_191_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV &&
+        echo "TABLEGEN_190_PREFIX=/usr/lib/llvm-19/" >> $GITHUB_ENV

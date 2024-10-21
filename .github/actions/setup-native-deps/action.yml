@@ -12,7 +12,7 @@ runs:
       id: set-runtime-deps
       shell: bash
       run: |
-        ./scripts/setup_native_deps.sh
+        sudo ./scripts/setup_native_deps.sh
 
     - name: Set Environment Variables
       id: set-env-vars

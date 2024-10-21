@@ -97,6 +97,7 @@ install_cairo_native_runtime() {
 
 	cp ./cairo_native/target/release/libcairo_native_runtime.a $(pwd)/libcairo_native_runtime.a
 	rm -rf ./cairo_native
+	chmod 644 $(pwd)/libcairo_native_runtime.a
 
 	export CAIRO_NATIVE_RUNTIME_LIBRARY="$(pwd)/libcairo_native_runtime.a"
 

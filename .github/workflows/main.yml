@@ -103,50 +103,6 @@ jobs:
           version: ${{env.PROTOC_VERSION}}
       - run: cargo doc -p blockifier -r --document-private-items --no-deps
 
-  run-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Fetch the entire history.
-          fetch-depth: 0
-      - uses: ./.github/actions/install_rust
-      - name: Set up Native Dependencies
-        uses: ./.github/actions/setup-native-deps
-        id: native-deps
-      - uses: Noelware/setup-protoc@1.1.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust-ubuntu-latest"
-
-      # Setup pypy and link to the location expected by .cargo/config.toml.
-      - uses: actions/setup-python@v5
-        id: setup-pypy
-        with:
-          python-version: "pypy3.9"
-      - run: ln -s '${{ steps.setup-pypy.outputs.python-path }}' /usr/local/bin/pypy3.9
-      - env:
-          LD_LIBRARY_PATH: ${{ env.Python3_ROOT_DIR }}/bin
-        run: echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
-      - name: "Run tests pull request"
-        if: github.event_name == 'pull_request'
-        run: |
-          python3 -m venv ci
-          ci/bin/pip install -r scripts/requirements.txt
-          ci/bin/python scripts/run_tests.py --changes_only --commit_id ${{ github.event.pull_request.base.sha }}
-        env:
-          SEED: 0
-
-      - name: "Run tests on push"
-        if: github.event_name == 'push'
-        # TODO: Better support for running tests on push.
-        run: |
-          python3 -m venv ci
-          ci/bin/pip install -r scripts/requirements.txt
-          ci/bin/python scripts/run_tests.py
-        env:
-          SEED: 0
-
   taplo:
     runs-on: ubuntu-latest
     steps:

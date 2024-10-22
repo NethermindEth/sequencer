@@ -1,6 +1,6 @@
 use std::collections::HashSet;
+use std::fmt;
 use std::hash::RandomState;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use ark_ec::short_weierstrass::{Affine, Projective, SWCurveConfig};
@@ -722,7 +722,7 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
         })
     }
 
-    // The secp256 syscalls are implement in impl<Curve: SWCurveConfig> SecpHintProcessor<Curve>
+    // The secp256 syscalls are implement in impl<Curve: SWCurveConfig> Secp256Point<Curve>
     // The trait methods are responsible for routing to the correct hint processor (r1 or k1).
 
     fn secp256k1_new(
@@ -875,10 +875,10 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
 
     fn sha256_process_block(
         &mut self,
-        prev_state: &[u32; 8],
+        prev_state: &mut [u32; 8],
         current_block: &[u32; 16],
         remaining_gas: &mut u128,
-    ) -> SyscallResult<[u32; 8]> {
+    ) -> SyscallResult<()> {
         const SHA256_STATE_SIZE: usize = 8;
 
         self.pre_execute_syscall(
@@ -895,7 +895,10 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
         );
         let mut state: [u32; SHA256_STATE_SIZE] = *prev_state;
         sha2::compress256(&mut state, &[data_as_bytes]);
-        Ok(state)
+
+        prev_state.copy_from_slice(&state);
+
+        Ok(())
     }
 }
 
@@ -903,13 +906,13 @@ use ark_ff::PrimeField;
 
 impl<Curve: SWCurveConfig> Secp256Point<Curve>
 where
-    // It's not possible to directly constrain on
-    // ark_secp256k1::Config and
-    // ark_secp256r1::Config. The following
-    // constraints have the same effect.
     Curve::BaseField: PrimeField, // constraint for get_point_by_id
-    ark_ff::BigInt<4>: From<<Curve>::BaseField>, // constraint for point to bigint
 {
+    // Given a (x,y) pair it will
+    // - return the point at infinity for (0,0)
+    // - Err if either x or y is outside of the modulus
+    // - Ok(None) if (x,y) are within the modules but not on the curve
+    // - Ok(Some(Point)) if (x,y) are on the curve
     fn new(x: U256, y: U256) -> Result<Option<Self>, Vec<Felt>> {
         let x = u256_to_biguint(x);
         let y = u256_to_biguint(y);
@@ -925,22 +928,17 @@ where
             return Err(vec![error]);
         }
 
-        Ok(maybe_affine(x.into(), y.into()).map(|p| p.into()))
+        Ok(maybe_affine(x.into(), y.into()))
     }
 
-    fn add(p0: Secp256Point<Curve>, p1: Secp256Point<Curve>) -> Self {
-        let lhs: Affine<Curve> = p0.into();
-        let rhs: Affine<Curve> = p1.into();
-        let result: Projective<Curve> = lhs + rhs;
-        let result: Affine<Curve> = result.into();
-        result.into()
+    fn add(p0: Self, p1: Self) -> Self {
+        let result: Projective<Curve> = p0.0 + p1.0;
+        Secp256Point(result.into())
     }
 
-    fn mul(p: Secp256Point<Curve>, m: U256) -> Self {
-        let p: Affine<Curve> = p.into();
-        let result = p * Curve::ScalarField::from(u256_to_biguint(m));
-        let result: Affine<Curve> = result.into();
-        result.into()
+    fn mul(p: Self, m: U256) -> Self {
+        let result = p.0 * Curve::ScalarField::from(u256_to_biguint(m));
+        Secp256Point(result.into())
     }
 
     fn get_point_from_x(x: U256, y_parity: bool) -> Result<Option<Self>, Vec<Felt>> {
@@ -970,16 +968,15 @@ where
             .map(|y| Affine::<Curve>::new_unchecked(x, y))
             .filter(|p| p.is_in_correct_subgroup_assuming_on_curve());
 
-        Ok(maybe_ec_point.map(|p| p.into()))
+        Ok(maybe_ec_point.map(Secp256Point))
     }
 }
 
-/// Similar to [`Affine<Curve>::new`], but with checks for 0 and doesn't panic.
+/// Variation on [`Affine<Curve>::new`] that doesn't panic and maps (x,y) = (0,0) -> infinity
 fn maybe_affine<Curve: SWCurveConfig>(
     x: Curve::BaseField,
     y: Curve::BaseField,
-) -> Option<Affine<Curve>> {
-    // use match for a better
+) -> Option<Secp256Point<Curve>> {
     let ec_point = if x.is_zero() && y.is_zero() {
         Affine::<Curve>::identity()
     } else {
@@ -987,20 +984,21 @@ fn maybe_affine<Curve: SWCurveConfig>(
     };
 
     if ec_point.is_on_curve() && ec_point.is_in_correct_subgroup_assuming_on_curve() {
-        Some(ec_point)
+        Some(Secp256Point(ec_point))
     } else {
         None
     }
 }
 
-/// Note [Hint processor and Secp256Point]
-/// With this data structure and its From instances we
-/// tie a hint processor to the corresponding Secp256k1 or Secp256r1 point.
-/// Thereby making the hint processor operations generic over the Secp256 point.
-struct Secp256Point<Config> {
-    x: U256,
-    y: U256,
-    _phantom: PhantomData<Config>,
+/// Data structure to tie together k1 and r1 points to it's corresponding
+/// `Affine<Curve>`
+#[derive(PartialEq, Clone, Copy)]
+struct Secp256Point<Curve: SWCurveConfig>(Affine<Curve>);
+
+impl<Curve: SWCurveConfig> fmt::Debug for Secp256Point<Curve> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Secp256Point").field(&self.0).finish()
+    }
 }
 
 use std::convert::From;
@@ -1008,48 +1006,61 @@ use std::convert::From;
 use crate::transaction::transaction_utils::update_remaining_gas;
 
 impl From<Secp256Point<ark_secp256k1::Config>> for Secp256k1Point {
-    fn from(p: Secp256Point<ark_secp256k1::Config>) -> Self {
-        Secp256k1Point { x: p.x, y: p.y }
+    fn from(Secp256Point(Affine { x, y, infinity }): Secp256Point<ark_secp256k1::Config>) -> Self {
+        Secp256k1Point {
+            x: big4int_to_u256(x.into()),
+            y: big4int_to_u256(y.into()),
+            is_infinity: infinity,
+        }
     }
 }
 
 impl From<Secp256Point<ark_secp256r1::Config>> for Secp256r1Point {
-    fn from(p: Secp256Point<ark_secp256r1::Config>) -> Self {
-        Secp256r1Point { x: p.x, y: p.y }
+    fn from(Secp256Point(Affine { x, y, infinity }): Secp256Point<ark_secp256r1::Config>) -> Self {
+        Secp256r1Point {
+            x: big4int_to_u256(x.into()),
+            y: big4int_to_u256(y.into()),
+            is_infinity: infinity,
+        }
     }
 }
 
 impl From<Secp256k1Point> for Secp256Point<ark_secp256k1::Config> {
     fn from(p: Secp256k1Point) -> Self {
-        Self { x: p.x, y: p.y, _phantom: Default::default() }
+        Secp256Point(Affine {
+            x: u256_to_biguint(p.x).into(),
+            y: u256_to_biguint(p.y).into(),
+            infinity: p.is_infinity,
+        })
     }
 }
 
 impl From<Secp256r1Point> for Secp256Point<ark_secp256r1::Config> {
     fn from(p: Secp256r1Point) -> Self {
-        Self { x: p.x, y: p.y, _phantom: Default::default() }
+        Secp256Point(Affine {
+            x: u256_to_biguint(p.x).into(),
+            y: u256_to_biguint(p.y).into(),
+            infinity: p.is_infinity,
+        })
     }
 }
 
-impl<Curve: SWCurveConfig> From<Secp256Point<Curve>> for Affine<Curve>
-where
-    Curve::BaseField: From<num_bigint::BigUint>,
-{
-    fn from(p: Secp256Point<Curve>) -> Self {
-        Affine::<Curve>::new(u256_to_biguint(p.x).into(), u256_to_biguint(p.y).into())
-    }
-}
+#[cfg(test)]
+mod test {
+    use cairo_native::starknet::U256;
 
-impl<Curve: SWCurveConfig> From<Affine<Curve>> for Secp256Point<Curve>
-where
-    ark_ff::BigInt<4>: From<<Curve>::BaseField>,
-{
-    fn from(point: Affine<Curve>) -> Self {
-        // Here /into/ must be used, accessing the BigInt via .0 will lead to an
-        // transformation being missed.
-        let x = big4int_to_u256(point.x.into());
-        let y = big4int_to_u256(point.y.into());
+    use super::Secp256Point;
 
-        Self { x, y, _phantom: Default::default() }
+    #[test]
+    fn infinity_test() {
+        let p1 =
+            Secp256Point::<ark_secp256k1::Config>::get_point_from_x(U256 { lo: 1, hi: 0 }, false)
+                .unwrap()
+                .unwrap();
+
+        let p2 = Secp256Point::mul(p1, U256 { lo: 0, hi: 0 });
+        assert!(p2.0.infinity);
+
+        assert_eq!(p1, Secp256Point::add(p1, p2));
     }
 }

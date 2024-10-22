@@ -283,8 +283,7 @@ impl FeatureContract {
                 "feature_contracts/cairo{}/{}.cairo",
                 match self.cairo_version() {
                     CairoVersion::Cairo0 => "0",
-                    CairoVersion::Cairo1 => "1",
-                    CairoVersion::Native => "_native",
+                    CairoVersion::Cairo1 | CairoVersion::Native => "1",
                 },
                 self.get_non_erc20_base_name()
             )
@@ -303,11 +302,15 @@ impl FeatureContract {
             }
             .into(),
             _ => format!(
-                "feature_contracts/cairo{}/compiled/{}{}.json",
+                "feature_contracts/cairo{}/compiled{}/{}{}.json",
                 match self.cairo_version() {
                     CairoVersion::Cairo0 => "0",
-                    CairoVersion::Cairo1 => "1",
-                    CairoVersion::Native => "_native",
+                    CairoVersion::Cairo1 | CairoVersion::Native => "1",
+                },
+                match self.cairo_version() {
+                    CairoVersion::Cairo0 => "",
+                    CairoVersion::Cairo1 => "_casm",
+                    CairoVersion::Native => "_sierra",
                 },
                 self.get_non_erc20_base_name(),
                 match self.cairo_version() {

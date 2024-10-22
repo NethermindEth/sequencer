@@ -19,13 +19,13 @@ setup_llvm_deps() {
 		brew install llvm@19
 
 		LIBRARY_PATH=/opt/homebrew/lib
-		MLIR_SYS_190_PREFIX="$(brew --prefix llvm@18)"
-		LLVM_SYS_190_PREFIX="$MLIR_SYS_190_PREFIX"
+		MLIR_SYS_190_PREFIX="$(brew --prefix llvm@19)"
+		LLVM_SYS_191_PREFIX="$MLIR_SYS_190_PREFIX"
 		TABLEGEN_190_PREFIX="$MLIR_SYS_190_PREFIX"
 
 		export LIBRARY_PATH
 		export MLIR_SYS_190_PREFIX
-		export LLVM_SYS_190_PREFIX
+		export LLVM_SYS_191_PREFIX
 		export TABLEGEN_190_PREFIX
 		;;
 	Linux)
@@ -45,11 +45,11 @@ setup_llvm_deps() {
     apt-get install -y libgmp3-dev
 
 		MLIR_SYS_190_PREFIX=/usr/lib/llvm-19/
-		LLVM_SYS_190_PREFIX=/usr/lib/llvm-19/
+		LLVM_SYS_191_PREFIX=/usr/lib/llvm-19/
 		TABLEGEN_190_PREFIX=/usr/lib/llvm-19/
 
 		export MLIR_SYS_190_PREFIX
-		export LLVM_SYS_190_PREFIX
+		export LLVM_SYS_191_PREFIX
 		export TABLEGEN_190_PREFIX
 		;;
 	*)
@@ -61,7 +61,7 @@ setup_llvm_deps() {
 	# GitHub Actions specific
 	[ -n "$GITHUB_ACTIONS" ] && {
     echo "MLIR_SYS_190_PREFIX=$MLIR_SYS_190_PREFIX" >> $GITHUB_ENV
-    echo "LLVM_SYS_190_PREFIX=$LLVM_SYS_190_PREFIX" >> $GITHUB_ENV
+    echo "LLVM_SYS_191_PREFIX=$LLVM_SYS_191_PREFIX" >> $GITHUB_ENV
     echo "TABLEGEN_190_PREFIX=$TABLEGEN_190_PREFIX" >> $GITHUB_ENV
 	}
 }
@@ -87,29 +87,11 @@ install_rust() {
 	echo "Rust installed successfully."
 }
 
-install_cairo_native_runtime() {
-  install_rust || { echo "Error: Failed to install Rust"; exit 1; }
-
-	git clone https://github.com/lambdaclass/cairo_native.git
-	pushd ./cairo_native || exit 1
-	cargo build -p cairo-native-runtime --release --all-features --quiet
-	popd || exit 1
-
-	mv ./cairo_native/target/release/libcairo_native_runtime.a ./libcairo_native_runtime.so
-	rm -rf ./cairo_native
-
-	export CAIRO_NATIVE_RUNTIME_LIBRARY="$(pwd)/libcairo_native_runtime.so"
-
-  echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY"
-
-	[ -n "$GITHUB_ACTIONS" ] && echo "CAIRO_NATIVE_RUNTIME_LIBRARY=$CAIRO_NATIVE_RUNTIME_LIBRARY" >> $GITHUB_ENV
-}
-
 main() {
   [ "$(uname)" = "Linux" ] && install_essential_deps_linux
 
 	setup_llvm_deps
-	install_cairo_native_runtime
+  install_rust
 
 	echo "LLVM and Cairo native runtime dependencies installed successfully."
 }

@@ -39,6 +39,7 @@ concurrency:
 
 jobs:
   featureless-build:
+    name: Featureless Build & Test (Blockifier)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

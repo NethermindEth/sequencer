@@ -155,6 +155,8 @@ impl FeatureContract {
                 | Self::TestContract(_)
                 | Self::TestContractEntryPointA
                 | Self::TestContractEntryPointB
+                | Self::AccountWithoutValidations(_)
+                | Self::FaultyAccount(_)
         );
 
         u32::from(supports_legacy)
@@ -389,7 +391,14 @@ impl FeatureContract {
                     .offset
             }
             ContractClass::V1Native(_) => {
-                panic!("Not implemented for cairo native contracts")
+                #[cfg(test)]
+                {
+                    EntryPointOffset(10001000)
+                }
+                #[cfg(not(test))]
+                {
+                    panic!("unsupported");
+                }
             }
         }
     }

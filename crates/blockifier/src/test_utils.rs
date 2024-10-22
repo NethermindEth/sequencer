@@ -212,6 +212,7 @@ pub fn pad_address_to_64(address: &str) -> String {
 }
 
 pub fn get_raw_contract_class(contract_path: &str) -> String {
+    println!("contract_path: {}", contract_path);
     let path: PathBuf = [env!("CARGO_MANIFEST_DIR"), contract_path].iter().collect();
     fs::read_to_string(path).unwrap()
 }

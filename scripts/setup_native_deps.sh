@@ -9,7 +9,8 @@ install_essential_deps_linux() {
     wget \
     ca-certificates \
     gnupg \
-    git
+    git \
+    lld
 }
 
 setup_llvm_deps() {

@@ -194,6 +194,90 @@ impl<'state> NativeSyscallHandler<'state> {
 
         Ok(())
     }
+
+    fn get_native_block_for_execution_info(&self) -> BlockInfo {
+        // Get Block Info
+        let block_info = &self.execution_context.tx_context.block_context.block_info;
+        if self.execution_context.execution_mode == ExecutionMode::Validate {
+            let versioned_constants = self.execution_context.versioned_constants();
+            let block_number = block_info.block_number.0;
+            let block_timestamp = block_info.block_timestamp.0;
+            // Round down to the nearest multiple of validate_block_number_rounding.
+            let validate_block_number_rounding =
+                versioned_constants.get_validate_block_number_rounding();
+            let rounded_block_number =
+                (block_number / validate_block_number_rounding) * validate_block_number_rounding;
+            // Round down to the nearest multiple of validate_timestamp_rounding.
+            let validate_timestamp_rounding = versioned_constants.get_validate_timestamp_rounding();
+            let rounded_timestamp =
+                (block_timestamp / validate_timestamp_rounding) * validate_timestamp_rounding;
+            BlockInfo {
+                block_number: rounded_block_number,
+                block_timestamp: rounded_timestamp,
+                sequencer_address: Felt::ZERO,
+            }
+        } else {
+            BlockInfo {
+                block_number: block_info.block_number.0,
+                block_timestamp: block_info.block_timestamp.0,
+                sequencer_address: contract_address_to_native_felt(block_info.sequencer_address),
+            }
+        }
+    }
+
+    fn get_tx_info_for_execution_info_v1(&self) -> TxInfo {
+        let tx_info = &self.execution_context.tx_context.tx_info;
+        TxInfo {
+            version: tx_info.version().0,
+            account_contract_address: contract_address_to_native_felt(tx_info.sender_address()),
+            max_fee: tx_info.max_fee().unwrap_or_default().0,
+            signature: tx_info.signature().0,
+            transaction_hash: tx_info.transaction_hash().0,
+            chain_id: Felt::from_hex(
+                &self.execution_context.tx_context.block_context.chain_info.chain_id.as_hex(),
+            )
+            .unwrap(),
+            nonce: tx_info.nonce().0,
+        }
+    }
+
+    fn get_tx_info_for_execution_info_v2(&self) -> SyscallResult<TxV2Info> {
+        // Get Transaction Info
+        let tx_info = &self.execution_context.tx_context.tx_info;
+        let native_tx_info = TxV2Info {
+            version: tx_info.signed_version().0,
+            account_contract_address: contract_address_to_native_felt(tx_info.sender_address()),
+            max_fee: max_fee_for_execution_info(tx_info).to_u128().unwrap(),
+            signature: tx_info.signature().0,
+            transaction_hash: tx_info.transaction_hash().0,
+            chain_id: Felt::from_hex(
+                &self.execution_context.tx_context.block_context.chain_info.chain_id.as_hex(),
+            )
+            .unwrap(),
+            nonce: tx_info.nonce().0,
+            ..default_tx_v2_info()
+        };
+
+        match tx_info {
+            TransactionInfo::Deprecated(_) => Ok(native_tx_info),
+            TransactionInfo::Current(context) => {
+                // If handling V3 transaction fill the "default" fields
+                let to_u32 = |x| match x {
+                    DataAvailabilityMode::L1 => 0,
+                    DataAvailabilityMode::L2 => 1,
+                };
+                Ok(TxV2Info {
+                    resource_bounds: calculate_resource_bounds(context)?,
+                    tip: context.tip.0.into(),
+                    paymaster_data: context.paymaster_data.0.clone(),
+                    nonce_data_availability_mode: to_u32(context.nonce_data_availability_mode),
+                    fee_data_availability_mode: to_u32(context.fee_data_availability_mode),
+                    account_deployment_data: context.account_deployment_data.0.clone(),
+                    ..native_tx_info
+                })
+            }
+        }
+    }
 }
 
 impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
@@ -253,49 +337,9 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().get_execution_info_gas_cost,
         )?;
 
-        let block_info = &self.execution_context.tx_context.block_context.block_info;
-        let native_block_info: BlockInfo = if self.execution_context.execution_mode
-            == ExecutionMode::Validate
-        {
-            // TODO: Literal copy from get execution info v2, could be refactored
-            let versioned_constants = self.execution_context.versioned_constants();
-            let block_number = block_info.block_number.0;
-            let block_timestamp = block_info.block_timestamp.0;
-            // Round down to the nearest multiple of validate_block_number_rounding.
-            let validate_block_number_rounding =
-                versioned_constants.get_validate_block_number_rounding();
-            let rounded_block_number =
-                (block_number / validate_block_number_rounding) * validate_block_number_rounding;
-            // Round down to the nearest multiple of validate_timestamp_rounding.
-            let validate_timestamp_rounding = versioned_constants.get_validate_timestamp_rounding();
-            let rounded_timestamp =
-                (block_timestamp / validate_timestamp_rounding) * validate_timestamp_rounding;
-            BlockInfo {
-                block_number: rounded_block_number,
-                block_timestamp: rounded_timestamp,
-                sequencer_address: Felt::ZERO,
-            }
-        } else {
-            BlockInfo {
-                block_number: block_info.block_number.0,
-                block_timestamp: block_info.block_timestamp.0,
-                sequencer_address: contract_address_to_native_felt(block_info.sequencer_address),
-            }
-        };
+        let native_block_info = self.get_native_block_for_execution_info();
 
-        let tx_info = &self.execution_context.tx_context.tx_info;
-        let native_tx_info = TxInfo {
-            version: tx_info.version().0,
-            account_contract_address: contract_address_to_native_felt(tx_info.sender_address()),
-            max_fee: tx_info.max_fee().unwrap_or_default().0,
-            signature: tx_info.signature().0,
-            transaction_hash: tx_info.transaction_hash().0,
-            chain_id: Felt::from_hex(
-                &self.execution_context.tx_context.block_context.chain_info.chain_id.as_hex(),
-            )
-            .unwrap(),
-            nonce: tx_info.nonce().0,
-        };
+        let native_tx_info = self.get_tx_info_for_execution_info_v1();
 
         let caller_address = contract_address_to_native_felt(self.caller_address);
         let contract_address = contract_address_to_native_felt(self.contract_address);
@@ -320,67 +364,9 @@ impl<'state> StarknetSyscallHandler for &mut NativeSyscallHandler<'state> {
             self.execution_context.gas_costs().get_execution_info_gas_cost,
         )?;
 
-        // Get Block Info
-        let block_info = &self.execution_context.tx_context.block_context.block_info;
-        let native_block_info: BlockInfo = if self.execution_context.execution_mode
-            == ExecutionMode::Validate
-        {
-            let versioned_constants = self.execution_context.versioned_constants();
-            let block_number = block_info.block_number.0;
-            let block_timestamp = block_info.block_timestamp.0;
-            // Round down to the nearest multiple of validate_block_number_rounding.
-            let validate_block_number_rounding =
-                versioned_constants.get_validate_block_number_rounding();
-            let rounded_block_number =
-                (block_number / validate_block_number_rounding) * validate_block_number_rounding;
-            // Round down to the nearest multiple of validate_timestamp_rounding.
-            let validate_timestamp_rounding = versioned_constants.get_validate_timestamp_rounding();
-            let rounded_timestamp =
-                (block_timestamp / validate_timestamp_rounding) * validate_timestamp_rounding;
-            BlockInfo {
-                block_number: rounded_block_number,
-                block_timestamp: rounded_timestamp,
-                sequencer_address: Felt::ZERO,
-            }
-        } else {
-            BlockInfo {
-                block_number: block_info.block_number.0,
-                block_timestamp: block_info.block_timestamp.0,
-                sequencer_address: contract_address_to_native_felt(block_info.sequencer_address),
-            }
-        };
+        let native_block_info = self.get_native_block_for_execution_info();
 
-        // Get Transaction Info
-        let tx_info = &self.execution_context.tx_context.tx_info;
-        let mut native_tx_info = TxV2Info {
-            version: tx_info.signed_version().0,
-            account_contract_address: contract_address_to_native_felt(tx_info.sender_address()),
-            max_fee: max_fee_for_execution_info(tx_info).to_u128().unwrap(),
-            signature: tx_info.signature().0,
-            transaction_hash: tx_info.transaction_hash().0,
-            chain_id: Felt::from_hex(
-                &self.execution_context.tx_context.block_context.chain_info.chain_id.as_hex(),
-            )
-            .unwrap(),
-            nonce: tx_info.nonce().0,
-            ..default_tx_v2_info()
-        };
-        // If handling V3 transaction fill the "default" fields
-        if let TransactionInfo::Current(context) = tx_info {
-            let to_u32 = |x| match x {
-                DataAvailabilityMode::L1 => 0,
-                DataAvailabilityMode::L2 => 1,
-            };
-            native_tx_info = TxV2Info {
-                resource_bounds: calculate_resource_bounds(context)?,
-                tip: context.tip.0.into(),
-                paymaster_data: context.paymaster_data.0.clone(),
-                nonce_data_availability_mode: to_u32(context.nonce_data_availability_mode),
-                fee_data_availability_mode: to_u32(context.fee_data_availability_mode),
-                account_deployment_data: context.account_deployment_data.0.clone(),
-                ..native_tx_info
-            };
-        }
+        let native_tx_info = self.get_tx_info_for_execution_info_v2()?;
 
         let caller_address = contract_address_to_native_felt(self.caller_address);
         let contract_address = contract_address_to_native_felt(self.contract_address);

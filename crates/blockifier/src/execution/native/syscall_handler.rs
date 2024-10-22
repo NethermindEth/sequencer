@@ -991,7 +991,7 @@ fn maybe_affine<Curve: SWCurveConfig>(
 }
 
 /// Data structure to tie together k1 and r1 points to it's corresponding
-/// Affine<Curve>
+/// `Affine<Curve>`
 #[derive(PartialEq, Clone, Copy)]
 struct Secp256Point<Curve: SWCurveConfig>(Affine<Curve>);
 
@@ -1059,7 +1059,7 @@ mod test {
                 .unwrap();
 
         let p2 = Secp256Point::mul(p1, U256 { lo: 0, hi: 0 });
-        assert_eq!(p2.0.infinity, true);
+        assert!(p2.0.infinity);
 
         assert_eq!(p1, Secp256Point::add(p1, p2));
     }

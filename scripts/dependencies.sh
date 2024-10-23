@@ -48,29 +48,11 @@ function setup_llvm_deps() {
     esac
 }
 
-# Downloads libcairo_native_runtime.a
-function download_cairo_native_runtime() {
-    TARGET_LIB_DIR="$1"
-    CAIRO_LIB_VERSION="0.2.0-alpha.2"
-    curl "https://github.com/lambdaclass/cairo_native/releases/tag/v${CAIRO_LIB_VERSION}" --output ${LIBCAIRO_NATIVE_DIR}/libcairo_native_runtime.a
-}
-
 function main() {
-    # Set LIBCAIRO_NATIVE_DIR as first argument.
-    # Assumes this script is in `sequencer/scripts/`
-    # By default, copy to `sequencer/scripts/../crates/blockifier`
-    # Used in `.github/actions/bootstrap/action.yml` and when calling manually.
-    THIS_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-    DEFAULT_DIR="$THIS_DIR/../crates/blockifier"
-    LIBCAIRO_NATIVE_DIR=${1:-"$DEFAULT_DIR"}
-
     [ "$(uname)" = "Linux" ] && install_essential_deps_linux
     setup_llvm_deps
     echo "LLVM dependencies installed successfully."
-
-    download_cairo_native_runtime "$LIBCAIRO_NATIVE_DIR"
-    echo "Cairo Native runtime compiled successfully."
 }
 
-main "$@"
+main
 

@@ -4,8 +4,6 @@ set -e
 set -x
 
 [[ ${UID} == "0" ]] || SUDO="sudo"
-# Set LIBCAIRO_NATIVE_DIR as first argument, or by default the pwd.
-LIBCAIRO_NATIVE_DIR=${1:-$(pwd)}
 
 function install_common_packages() {
     $SUDO  bash -c '
@@ -55,4 +53,4 @@ install_common_packages
 install_pypy &
 install_rust &
 wait
-./dependencies.sh "$LIBCAIRO_NATIVE_DIR"
+./dependencies.sh

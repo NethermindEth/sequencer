@@ -58,6 +58,11 @@ thiserror.workspace = true
 tikv-jemallocator = { workspace = true, optional = true }
 toml.workspace = true
 
+[build-dependencies]
+curl = "0.4.47"
+toml = "0.8.19"
+url = "2.5.2"
+
 [dev-dependencies]
 assert_matches.workspace = true
 criterion = { workspace = true, features = ["html_reports"] }
